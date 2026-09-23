@@ -1,0 +1,23 @@
+mcp[cli]>=1.0.0,<2
+ruff
+pytest
+
+# The mock HSM server and REST client are otherwise stdlib-only
+# (http.server, urllib). `mcp` (the official Model Context Protocol Python
+# SDK) is needed to run mcp_server/hsm_tools.py and tests/test_mcp_tools.py.
+# Claude Code itself supplies the model connection -- no ANTHROPIC_API_KEY
+# or anthropic SDK is needed in this project.
+#
+# Pinned to <2: the mcp SDK's 2.x line renamed FastMCP to MCPServer with a
+# different API (see the project's migration guide if you want to move to
+# it later) -- mcp_server/hsm_tools.py is written against the 1.x
+# `mcp.server.fastmcp.FastMCP` API and hasn't been ported.
+#
+# The [cli] extra pulls in typer/uvicorn, needed only for the optional
+# `mcp dev mcp_server/hsm_tools.py` command (launches the MCP Inspector).
+# The server itself (mcp.server.fastmcp) works with plain `mcp` too.
+#
+# `ruff` is the linter .claude/hooks/lint_before_commit.py runs before
+# allowing a `git commit`. If it isn't installed, that hook fails OPEN
+# (logs a warning, lets the commit through) rather than blocking every
+# commit -- install it to make the gate actually enforce.

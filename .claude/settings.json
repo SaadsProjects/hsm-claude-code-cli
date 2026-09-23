@@ -1,0 +1,32 @@
+{
+  "permissions": {
+    "ask": [
+      "mcp__hsm__publish_schedule",
+      "mcp__hsm__submit_purchase_order"
+    ]
+  },
+  "hooks": {
+    "PreToolUse": [
+      {
+        "matcher": "mcp__hsm__publish_schedule",
+        "hooks": [
+          {
+            "type": "command",
+            "command": "python3 \"$CLAUDE_PROJECT_DIR\"/.claude/hooks/require_no_violations.py",
+            "timeout": 30
+          }
+        ]
+      },
+      {
+        "matcher": "Bash",
+        "hooks": [
+          {
+            "type": "command",
+            "command": "python3 \"$CLAUDE_PROJECT_DIR\"/.claude/hooks/lint_before_commit.py",
+            "timeout": 30
+          }
+        ]
+      }
+    ]
+  }
+}

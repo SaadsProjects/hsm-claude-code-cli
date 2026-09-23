@@ -1,0 +1,24 @@
+# Pinned so `ruff check` (and the lint_before_commit.py hook) gives the same
+# answer regardless of which ruff version or user-level config is installed.
+target-version = "py310"
+line-length = 120
+
+[lint]
+select = [
+    "E4", "E7", "E9",  # pycodestyle errors (no line-length rule)
+    "F",               # pyflakes
+    "W",               # pycodestyle warnings
+    "I",               # import sorting
+    "B",               # bugbear
+    "UP",              # pyupgrade
+    "SIM",             # simplify
+    "RUF",             # ruff-specific
+    "BLE",             # blind except
+    "DTZ",             # naive datetimes
+    "EXE",             # shebang/executable consistency
+    "PLW",             # pylint warnings
+    "ASYNC",           # async pitfalls
+]
+
+[lint.isort]
+known-first-party = ["agents", "mcp_server", "mock_hsm"]
