@@ -16,7 +16,6 @@ Registered with Claude Code via .mcp.json in the project root.
 """
 import os
 import sys
-from datetime import datetime, timedelta
 from pathlib import Path
 
 sys.path.insert(0, str(Path(__file__).resolve().parent.parent))
@@ -28,7 +27,6 @@ from agents.inventory_agent import compute_reorder_needs as _compute_reorder_nee
 from agents.inventory_agent import compute_usage_anomalies as _compute_usage_anomalies
 from agents.labor_scheduling_agent import compute_demand
 from mock_hsm.auth import mint_token
-from mock_hsm.db import RECIPES
 
 mcp = FastMCP("hsm", instructions=(
     "Tools for HSM (restaurant back-office) labor scheduling and inventory/"
@@ -91,9 +89,7 @@ def compute_labor_demand(site_id: str, start_offset_days: int = 7, days: int = 7
     fixed staffing ratios. Call this instead of estimating staffing demand
     yourself from a raw forecast."""
     forecast = _client().get_forecast(site_id, start_offset_days, days)
-    today = datetime.now().astimezone().date()  # site-local calendar date
-    dates = [today + timedelta(days=start_offset_days + i) for i in range(days)]
-    return {"site_id": site_id, "demand": compute_demand(forecast, dates)}
+    return {"site_id": site_id, "demand": compute_demand(forecast)}
 
 
 @mcp.tool()
@@ -113,9 +109,11 @@ def validate_schedule(jurisdiction: str, shifts: list) -> dict:
 @mcp.tool()
 def compute_usage_anomalies(site_id: str) -> dict:
     """DETERMINISTIC. Actual vs. recipe-expected raw-material usage over the
-    past 7 days, flagged where variance exceeds 15%. Returns the numeric
-    anomalies only -- interpreting likely cause/severity/action is your job,
-    not this tool's."""
+    past 7 days, flagged where variance exceeds 15%. variance_pct is null
+    when a material was used but no sales called for it at all (expected_qty
+    0) -- unexplained usage, not a data gap. Returns the numeric anomalies
+    only -- interpreting likely cause/severity/action is your job, not this
+    tool's."""
     client = _client()
     usage = client.get_usage(site_id, start_offset_days=-7, days=7)
     anomalies = _compute_usage_anomalies(site_id, usage, client.get_vendors())
@@ -133,7 +131,9 @@ def compute_reorder_needs(site_id: str) -> dict:
     client = _client()
     forecast = client.get_forecast(site_id, start_offset_days=0, days=7)
     on_hand_data = client.get_on_hand(site_id)
-    needs = _compute_reorder_needs(site_id, forecast, on_hand_data, RECIPES, client.get_vendors())
+    menu_item_ids = {item_id for day in forecast for item_id in day["items"]}
+    recipes = {item_id: client.get_recipe(item_id) for item_id in menu_item_ids}
+    needs = _compute_reorder_needs(site_id, forecast, on_hand_data, recipes, client.get_vendors())
     return {"site_id": site_id, "reorder_needs": needs}
 
 

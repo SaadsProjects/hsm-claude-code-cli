@@ -8,6 +8,8 @@ mapping back to the real architecture stays obvious.
 """
 import random
 import threading
+from datetime import datetime, timedelta
+from zoneinfo import ZoneInfo
 
 _lock = threading.RLock()
 
@@ -22,9 +24,12 @@ REGIONS = {
 }
 
 SITES = {
-    "site_001": {"site_id": "site_001", "name": "Midtown", "region_id": "region_atl", "org_id": "org_001", "jurisdiction": "GA"},
-    "site_002": {"site_id": "site_002", "name": "Buckhead", "region_id": "region_atl", "org_id": "org_001", "jurisdiction": "GA"},
-    "site_003": {"site_id": "site_003", "name": "Decatur", "region_id": "region_atl", "org_id": "org_001", "jurisdiction": "GA"},
+    "site_001": {"site_id": "site_001", "name": "Midtown", "region_id": "region_atl", "org_id": "org_001", "jurisdiction": "GA",
+                 "timezone": "America/New_York"},
+    "site_002": {"site_id": "site_002", "name": "Buckhead", "region_id": "region_atl", "org_id": "org_001", "jurisdiction": "GA",
+                 "timezone": "America/New_York"},
+    "site_003": {"site_id": "site_003", "name": "Decatur", "region_id": "region_atl", "org_id": "org_001", "jurisdiction": "GA",
+                 "timezone": "America/New_York"},
 }
 
 # Demo users / personas (System of Record for this would be the platform OIDC
@@ -190,14 +195,25 @@ def _seeded_rng(*parts):
     return random.Random(seed)
 
 
+def site_today(site_id):
+    """Today's calendar date in the site's own timezone."""
+    return datetime.now(ZoneInfo(SITES[site_id]["timezone"])).date()
+
+
+def _weekday_factor(day):
+    return 1.25 if day.weekday() in (4, 5) else 1.0  # Fri/Sat bump
+
+
 def get_forecast(site_id, start_offset_days, num_days):
     """AI/ML sales forecast, normally read from BigQuery. Returns per-day, per-item projected units."""
     rng = _seeded_rng("forecast", site_id)
     out = []
+    today = site_today(site_id)
     for d in range(start_offset_days, start_offset_days + num_days):
-        day_row = {"day_index": d, "items": {}}
+        day = today + timedelta(days=d)
+        day_row = {"day_index": d, "date": day.isoformat(), "items": {}}
         for item_id, base in _BASE_DAILY_UNITS.items():
-            weekday_factor = 1.25 if (d % 7) in (4, 5) else 1.0  # Fri/Sat bump
+            weekday_factor = _weekday_factor(day)
             noise = 1 + (rng.random() - 0.5) * 0.15
             units = base * _SITE_MULTIPLIER[site_id] * weekday_factor * noise
             day_row["items"][item_id] = round(units, 1)
@@ -209,10 +225,12 @@ def get_actual_sales(site_id, start_offset_days, num_days):
     """Actual POS sales for a past period (Transaction Data service)."""
     rng = _seeded_rng("actual_sales", site_id)
     out = []
+    today = site_today(site_id)
     for d in range(start_offset_days, start_offset_days + num_days):
-        day_row = {"day_index": d, "items": {}}
+        day = today + timedelta(days=d)
+        day_row = {"day_index": d, "date": day.isoformat(), "items": {}}
         for item_id, base in _BASE_DAILY_UNITS.items():
-            weekday_factor = 1.25 if (d % 7) in (4, 5) else 1.0
+            weekday_factor = _weekday_factor(day)
             noise = 1 + (rng.random() - 0.5) * 0.2
             units = base * _SITE_MULTIPLIER[site_id] * weekday_factor * noise
             day_row["items"][item_id] = round(units, 1)

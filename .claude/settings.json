@@ -23,7 +23,7 @@
           {
             "type": "command",
             "command": "python3 \"$CLAUDE_PROJECT_DIR\"/.claude/hooks/lint_before_commit.py",
-            "timeout": 30
+            "timeout": 120
           }
         ]
       }

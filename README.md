@@ -98,10 +98,11 @@ your code) against the staged diff, then commits only if you're satisfied
 with the review — and even then, `lint_before_commit.py` independently
 runs `ruff check` as a hard `PreToolUse` gate on the commit itself, so a
 dirty lint result blocks the commit regardless of what the review
-concluded or what a human approved. Install `ruff` (`pip install ruff`,
-already in `requirements.txt`) for that gate to actually enforce —
-otherwise it fails open and logs a warning instead of blocking every
-commit in an environment that never installed it.
+concluded or what a human approved. It lints what the commit will
+actually contain (the staged index, plus the working tree for `commit -a`
+or pathspecs). Install `ruff` (already in `requirements.txt`): if the hook
+can't find it on PATH, in `.venv/bin`, or as `python -m ruff`, it blocks
+the commit rather than letting it through unchecked.
 
 ## Persona reference
 

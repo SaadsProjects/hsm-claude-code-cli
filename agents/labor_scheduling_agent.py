@@ -19,10 +19,12 @@ def _weekday_abbr(d: date) -> str:
     return ["Mon", "Tue", "Wed", "Thu", "Fri", "Sat", "Sun"][d.weekday()]
 
 
-def compute_demand(forecast, dates):
-    """[deterministic] covers-per-day -> role-hours-per-day via fixed staffing ratios."""
+def compute_demand(forecast):
+    """[deterministic] covers-per-day -> role-hours-per-day via fixed staffing ratios.
+    Dates come from the forecast rows (site-local), not from this host's clock."""
     demand = []
-    for day_row, d in zip(forecast, dates, strict=True):
+    for day_row in forecast:
+        d = date.fromisoformat(day_row["date"])
         covers = sum(day_row["items"].values())
         role_hours = {jc: round(covers / ratio, 1) for jc, ratio in STAFFING_RATIO.items()}
         role_hours["JC-LEAD"] = LEAD_HOURS_PER_DAY

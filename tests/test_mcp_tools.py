@@ -90,6 +90,13 @@ async def _run():
         assert any(a["raw_material_id"] == "rm_ground_beef" for a in anomaly_data["anomalies"])
         print("OK: compute_usage_anomalies flags the seeded ground-beef drift")
 
+        # Recipes are fetched through HsmClient, not read from the mock DB.
+        reorder = await session.call_tool("compute_reorder_needs", {"site_id": "site_001"})
+        assert not reorder.isError, reorder.content[0].text
+        reorder_data = json.loads(reorder.content[0].text)
+        assert isinstance(reorder_data["reorder_needs"], list)
+        print(f"OK: compute_reorder_needs returned {len(reorder_data['reorder_needs'])} needs")
+
         # Scope enforcement flows through the MCP layer too, via the token
         # minted from HSM_ACTIVE_USER inside the tool implementation.
         other_site = await session.call_tool("get_employees", {"site_id": "site_002"})

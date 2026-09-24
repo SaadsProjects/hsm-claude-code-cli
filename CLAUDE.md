@@ -40,16 +40,23 @@ python3 mcp_server/hsm_tools.py          # run the MCP server standalone over st
 mcp dev mcp_server/hsm_tools.py          # MCP Inspector (needs the mcp[cli] extra)
 ```
 
-`test_labor_rules.py` calls the validator handler directly; `test_hooks.py`
-pipes JSON into the publish hook as Claude Code does (the hung-backend case
-takes ~5s by design). `tests/test_mcp_tools.py` is one sequential scenario
-(`_run()`) wrapped in a single pytest test, so the first failed assertion
-stops the run; it can also be run directly with `python3 tests/test_mcp_tools.py`. Adding a new
-MCP tool means adding its name to the `expected` set there.
+Test layout:
+- `test_labor_rules.py` and `test_calculations.py` call the validator handler
+  and the pure calculation functions directly.
+- `test_hooks.py` and `test_lint_hook.py` pipe JSON into the hook scripts the
+  way Claude Code does. The hung-backend case takes ~5s by design, and the
+  lint-hook tests build throwaway git repos in `tmp_path`.
+- `test_mcp_tools.py` is one sequential MCP-protocol scenario (`_run()`) in a
+  single pytest test, so the first failed assertion stops it; it can also be
+  run directly. Adding a new MCP tool means adding its name to its
+  `expected` set.
 
 If the `hsm` MCP server fails to connect, check that `mcp` is installed for
-the `python3` on PATH. If `ruff` isn't installed, the lint hook fails
-**open** (commits go through unchecked).
+the `python3` on PATH. If `ruff` isn't installed, the lint hook blocks
+every commit — install it rather than working around the hook. Because
+commit detection deliberately over-matches, it also blocks any Bash command
+whose text merely contains `git commit` (e.g. inside a heredoc) while ruff
+is missing or lint is dirty; use Edit/Write for such file edits.
 
 ## Running the workflows
 
@@ -82,12 +89,20 @@ The deterministic/LLM split is enforced by what's exposed as a tool:
   `agents/labor_scheduling_agent.py` (`compute_demand`) and
   `agents/inventory_agent.py` (`compute_usage_anomalies`,
   `compute_reorder_needs`, 15% variance threshold). The MCP tools just
-  fetch data and call these. Anything else in those modules that calls an
-  LLM is legacy and unused. New calculations belong there, not inline in
-  a tool.
+  fetch data through `HsmClient` and call these; never import `mock_hsm.db`
+  from the tool layer, or it breaks when `HSM_BASE_URL` points elsewhere.
+  New calculations belong in `agents/`, not inline in a tool.
+- **Dates are site-local and come from the backend.** Each site in
+  `mock_hsm/db.py` has a `timezone`; forecast and sales rows carry a real
+  `date`, and `compute_demand` labels days from those rows. Don't derive
+  dates from the host clock in the tool layer.
 - **Rule validation** happens server-side in the mock's
   `/labor/rules/validate` route (`labor_rules_validate` in
-  `mock_hsm/server.py`).
+  `mock_hsm/server.py`). Times must be strict `HH:MM` wall-clock (anything
+  else is a 400). An end at or before the start means the shift runs past
+  midnight. Same-day split shifts are allowed, but their combined hours are
+  capped (`max_daily_hours`) and shifts can't overlap.
+  `daily_ot_threshold_hours` is a cost input, not a violation.
 - **Judgment** (building shifts, anomaly cause/severity, PO consolidation)
   is left to the subagents in `.claude/agents/`. Each subagent's `tools:`
   frontmatter allowlists exactly the `mcp__hsm__*` tools it may use, so a
@@ -114,8 +129,8 @@ RNG and is deterministic. Some anomalies are planted on purpose (e.g. the
 
 Don't run `git commit` directly — go through `/commit`, which runs the
 read-only `code-reviewer` subagent on the staged diff first. The
-`lint_before_commit.py` hook separately blocks any `git commit` Bash call
-if `ruff check .` fails. If the reviewer finds something, decide whether
-to address it before committing rather than routing around it. (This
-directory is not currently a git repository, so `/commit` needs a
-`git init` first.)
+`lint_before_commit.py` hook separately blocks the commit if ruff fails on
+what the commit will contain: the staged index (exported to a temp dir),
+plus the working tree for `commit -a`/`-i`/`-o` or pathspecs. So re-stage
+after fixing lint errors. If the reviewer finds something, decide whether
+to address it before committing rather than routing around it.

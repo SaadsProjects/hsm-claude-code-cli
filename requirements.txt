@@ -18,6 +18,5 @@ pytest
 # The server itself (mcp.server.fastmcp) works with plain `mcp` too.
 #
 # `ruff` is the linter .claude/hooks/lint_before_commit.py runs before
-# allowing a `git commit`. If it isn't installed, that hook fails OPEN
-# (logs a warning, lets the commit through) rather than blocking every
-# commit -- install it to make the gate actually enforce.
+# allowing a `git commit`. If it isn't installed, that hook blocks every
+# commit (it fails closed), so install it before committing.
