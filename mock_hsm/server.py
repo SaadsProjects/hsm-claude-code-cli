@@ -53,6 +53,13 @@ def _require_site(claims, site_id):
         raise ApiError(403, f"persona {claims['persona']} not scoped to site {site_id}")
 
 
+def _require_region(claims, region_id):
+    if region_id not in db.REGIONS:
+        raise ApiError(404, f"unknown region {region_id}")
+    if not region_allowed(claims, region_id):
+        raise ApiError(403, f"persona {claims['persona']} not scoped to region {region_id}")
+
+
 def _int_qs(qs, key, default):
     if key in qs:
         return int(qs[key][0])
@@ -172,11 +179,17 @@ def inventory_usage(m, claims, qs, body):
 
 @route("POST", "/inventory/purchase-orders")
 def inventory_create_po(m, claims, qs, body):
-    site_id = body.get("site_id")
+    site_id, region_id = body.get("site_id"), body.get("region_id")
+    if not site_id and not region_id:
+        raise ApiError(400, "purchase order needs a site_id or region_id")
     if site_id:
         _require_site(claims, site_id)
-    elif claims["persona"] != "REGIONAL_MANAGER":
-        raise ApiError(403, "region-level PO requires a regional persona")
+    if region_id:
+        _require_region(claims, region_id)
+        if not site_id and claims["persona"] != "REGIONAL_MANAGER":
+            raise ApiError(403, "region-level PO requires a regional persona")
+        if site_id and db.SITES[site_id]["region_id"] != region_id:
+            raise ApiError(400, f"site {site_id} is not in region {region_id}")
     vendor_id = body.get("vendor_id")
     if vendor_id not in db.VENDORS:
         raise ApiError(400, f"unknown vendor {vendor_id}")

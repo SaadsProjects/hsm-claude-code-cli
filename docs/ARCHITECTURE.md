@@ -37,10 +37,6 @@ tool fetched through `HsmClient`. The tools never read data tables from
 up in its user table. Labor-rule validation is the exception to local
 math: it runs server-side in `POST /labor/rules/validate`.
 
-Known gap: a region-level purchase order checks that the caller is a
-Regional Manager, not that `region_id` is the caller's own region
-(`inventory_create_po` in `mock_hsm/server.py`).
-
 ## labor-scheduler: `/schedule-labor <site_id> [--publish]`
 
 Persona: Restaurant Manager scoped to the site (e.g. `user_rm_midtown`).
@@ -130,7 +126,7 @@ sequenceDiagram
         Note over U,T: [gate] permissions.ask prompt (no hook on this tool)
         U-->>T: approve
         T->>API: POST /inventory/purchase-orders
-        API-->>IA: PO (403 if site out of scope, or region PO without a regional persona)
+        API-->>IA: PO (403 if site or region out of scope, or region PO without a regional persona)
     end
     IA-->>MC: anomalies, draft POs, capped items
     MC-->>U: report
