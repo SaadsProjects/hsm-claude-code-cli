@@ -87,7 +87,10 @@ mcp_server/hsm_tools.py         MCP server: wraps the above as tools
 .claude/hooks/                  require_no_violations.py, lint_before_commit.py (both PreToolUse)
 .claude/settings.json           permission rules + hook registration
 tests/test_mcp_tools.py         protocol-level test, no LLM required
+docs/ARCHITECTURE.md            call-flow diagrams for each subagent
 ```
+
+See [docs/ARCHITECTURE.md](docs/ARCHITECTURE.md) for per-subagent call-flow diagrams.
 
 ## Linting + code review before committing
 
