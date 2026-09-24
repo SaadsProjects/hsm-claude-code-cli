@@ -20,10 +20,25 @@ permission flow, so a command that isn't `git commit`, or a `git commit`
 that lints clean, both pass through untouched -- this hook only ever
 actively blocks, never grants a bypass a human/agent didn't already have.
 
-What gets linted is what the commit will contain: the staged index always
-(exported to a temp dir), plus the working tree when the commit takes
-content from it (`-a`, `-i`, `-o`, or pathspecs). Commit detection errs
-toward over-matching -- a false positive only costs a lint run.
+What gets linted is what the commit will contain. The hook runs before
+the whole Bash command, so it sees the index as it is *before* anything
+else in that command runs:
+- always: the staged index (exported to a temp dir);
+- when the commit takes content from the working tree (`-a`, `-i`, `-o`,
+  or pathspecs): the working tree's tracked files;
+- when the same command also runs a git subcommand that can stage files
+  (`git add . && git commit ...`, or anything not known to be read-only):
+  the working tree's tracked *and* untracked, non-ignored files.
+For tracked files, only ones ruff would lint are passed (Python sources and
+pyproject.toml); with untracked files in play, ruff walks the tree itself.
+Detection errs toward over-matching -- a false positive only costs a lint run.
+
+Scope limits: non-git commands earlier in the same Bash call (`sed -i`,
+scripts, `make`, `pre-commit run`) run after this hook, so files they edit
+or stage aren't seen. This checks the project repo (CLAUDE_PROJECT_DIR) and its
+default index; a commit aimed elsewhere -- `git -C <dir>`, `cd <dir> &&`,
+`GIT_DIR`/`GIT_INDEX_FILE` -- is linted against this repo, not the one
+actually committed to.
 
 Fails CLOSED: a crashed or timed-out hook is non-blocking in Claude Code,
 so every failure to lint a commit (ruff missing, git error, timeout) is an
@@ -41,7 +56,13 @@ import sys
 import tempfile
 from pathlib import Path
 
-STEP_TIMEOUT_SECONDS = 20  # up to 4 steps; hook timeout in settings.json is 120s
+STEP_TIMEOUT_SECONDS = 20  # up to 5 steps; hook timeout in settings.json is 120s
+
+# Git subcommands that never change the index. Any other git call in the same
+# command as a commit is assumed to possibly stage files.
+_READ_ONLY_GIT = {"status", "diff", "log", "show", "rev-parse", "ls-files", "blame",
+                  "grep", "describe", "shortlog", "help", "version", "remote", "fetch",
+                  "push", "config", "branch", "tag", "reflog", "cat-file", "rev-list"}
 
 # Splits a shell command into simple commands, ignoring quotes. That
 # over-splits quoted text (a message like "fix (x)"), so it's only trusted to
@@ -119,11 +140,13 @@ def _shell_script(toks, i):
     return toks[j] if has_c and j < len(toks) else None
 
 
-def _commits_in(command, split, depth=0):
+def _git_calls(command, split, depth=0):
+    """(subcommand, args) for every git invocation in a shell command, or
+    None if the command can't be tokenized."""
     segments = split(command)
     if segments is None:
         return None
-    commits = []
+    calls = []
     for toks in segments:
         for i, tok in enumerate(toks):
             base = os.path.basename(tok)
@@ -136,14 +159,19 @@ def _commits_in(command, split, depth=0):
                 j = i + 1
                 while j < len(toks) and toks[j].startswith("-"):
                     j += 2 if toks[j] in _GIT_GLOBAL_OPTS_WITH_VALUE else 1
-                if j < len(toks) and toks[j] == "commit":
-                    commits.append(toks[j + 1:])
+                if j < len(toks):
+                    calls.append((toks[j], toks[j + 1:]))
             if script is not None:
-                nested = _commits_in(script, split, depth + 1)
+                nested = _git_calls(script, split, depth + 1)
                 if nested is None:
                     return None
-                commits += nested
-    return commits
+                calls += nested
+    return calls
+
+
+def _commits_in(command, split):
+    calls = _git_calls(command, split)
+    return None if calls is None else [args for sub, args in calls if sub == "commit"]
 
 
 def find_commits(command):
@@ -157,6 +185,14 @@ def find_commits(command):
         # quoted $(...) or backticks): its real arguments are unknown.
         return [None] * max(len(detected), len(parsed or []))
     return parsed
+
+
+def stages_in_same_command(command):
+    """True if the command runs a git subcommand, besides the commit, that
+    might change the index before the commit runs. Uses the quote-blind
+    split, so it over-matches (e.g. `git add` inside a commit message)."""
+    calls = _git_calls(command, _loose_segments)
+    return any(sub not in _READ_ONLY_GIT and sub != "commit" for sub, _ in calls)
 
 
 def commit_uses_worktree(args):
@@ -205,8 +241,16 @@ def _run(cmd, cwd):
                           timeout=STEP_TIMEOUT_SECONDS, check=False)
 
 
-def _lint(ruff, cwd, label):
-    result = _run([*ruff, "check", "--no-cache", "."], cwd)
+_PYTHON_SUFFIXES = (".py", ".pyi", ".ipynb")
+_MAX_PATH_ARGS = 2000  # beyond this, lint the whole tree instead of an argv list
+
+
+def _lintable(path):
+    return path.endswith(_PYTHON_SUFFIXES) or os.path.basename(path) == "pyproject.toml"
+
+
+def _lint(ruff, cwd, label, paths=(".",)):
+    result = _run([*ruff, "check", "--no-cache", "--force-exclude", "--", *paths], cwd)
     if result.returncode == 0:
         return None
     output = (result.stdout + result.stderr).strip()
@@ -215,7 +259,7 @@ def _lint(ruff, cwd, label):
     return f"ruff check failed on the {label} -- fix lint errors before committing:\n{truncated}"
 
 
-def lint_commit(repo, uses_worktree):
+def lint_commit(repo, uses_worktree, include_untracked=False):
     ruff = _ruff_command(repo)
     if ruff is None:
         return ("ruff not found (checked PATH, .venv/bin, and `python -m ruff`) -- "
@@ -231,9 +275,29 @@ def lint_commit(repo, uses_worktree):
         if export.returncode != 0:
             return f"could not export the staged index for linting: {export.stderr.strip()}"
         failure = _lint(ruff, staged, "staged changes")
-    if failure is None and uses_worktree:
-        failure = _lint(ruff, repo, "working tree (this commit includes unstaged changes)")
+    if failure is None and (uses_worktree or include_untracked):
+        failure = _lint_worktree(ruff, repo, include_untracked)
     return failure
+
+
+def _lint_worktree(ruff, repo, include_untracked):
+    if include_untracked:
+        # Anything non-ignored may get staged: let ruff walk the tree itself
+        # (it honours .gitignore and its default excludes like venv/).
+        return _lint(ruff, repo, "working tree (this command also stages files)")
+    listed = _run(["git", "ls-files", "-z", "--cached"], repo)
+    if listed.returncode != 0:
+        return f"could not list tracked files for linting: {listed.stderr.strip()}"
+    paths = sorted({p for p in listed.stdout.split("\0")
+                    if _lintable(p) and os.path.isfile(os.path.join(repo, p))})
+    if not paths:
+        return None
+    label = "working tree (this commit includes unstaged changes)"
+    if len(paths) > _MAX_PATH_ARGS:
+        # Too many to pass as arguments; linting everything over-blocks
+        # (untracked files too) but never lets a dirty file through.
+        return _lint(ruff, repo, label)
+    return _lint(ruff, repo, label, paths)
 
 
 def main(raw_payload):
@@ -245,8 +309,10 @@ def main(raw_payload):
     if not commits:
         return pass_through()
 
+    command = payload.get("tool_input", {}).get("command", "")
     repo = os.environ.get("CLAUDE_PROJECT_DIR") or payload.get("cwd") or "."
-    failure = lint_commit(repo, any(commit_uses_worktree(args) for args in commits))
+    failure = lint_commit(repo, any(commit_uses_worktree(args) for args in commits),
+                          include_untracked=stages_in_same_command(command))
     return deny(failure) if failure else pass_through()
 
 

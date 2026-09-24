@@ -180,14 +180,16 @@ def inventory_usage(m, claims, qs, body):
 @route("POST", "/inventory/purchase-orders")
 def inventory_create_po(m, claims, qs, body):
     site_id, region_id = body.get("site_id"), body.get("region_id")
+    if not all(isinstance(v, str) for v in (site_id, region_id) if v is not None):
+        raise ApiError(400, "site_id and region_id must be strings")
     if not site_id and not region_id:
         raise ApiError(400, "purchase order needs a site_id or region_id")
     if site_id:
         _require_site(claims, site_id)
     if region_id:
         _require_region(claims, region_id)
-        if not site_id and claims["persona"] != "REGIONAL_MANAGER":
-            raise ApiError(403, "region-level PO requires a regional persona")
+        if not site_id and claims["persona"] not in ("REGIONAL_MANAGER", "SYSTEM_ADMIN"):
+            raise ApiError(403, "region-level PO requires a regional or admin persona")
         if site_id and db.SITES[site_id]["region_id"] != region_id:
             raise ApiError(400, f"site {site_id} is not in region {region_id}")
     vendor_id = body.get("vendor_id")
