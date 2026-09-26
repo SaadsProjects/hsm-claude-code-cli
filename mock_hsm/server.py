@@ -208,6 +208,29 @@ def inventory_create_po(m, claims, qs, body):
     return 201, po
 
 
+@route("GET", "/inventory/purchase-orders")
+def inventory_list_pos(m, claims, qs, body):
+    site_id = qs.get("site_id", [None])[0]
+    region_id = qs.get("region_id", [None])[0]
+    if site_id:
+        _require_site(claims, site_id)
+    if region_id:
+        _require_region(claims, region_id)
+    with db._lock:
+        pos = [dict(po) for po in db.PURCHASE_ORDERS]
+
+    def visible(po):
+        # A site PO follows site scope; a region-level PO follows region scope.
+        if po["site_id"]:
+            return site_allowed(claims, po["site_id"])
+        return region_allowed(claims, po["region_id"])
+
+    pos = [po for po in pos if visible(po)
+           and (not site_id or po["site_id"] == site_id)
+           and (not region_id or po["region_id"] == region_id)]
+    return 200, {"purchase_orders": pos}
+
+
 # ------------------------------------------------------------------- Labor
 @route("GET", "/labor/sites/{site_id}/employees")
 def labor_employees(m, claims, qs, body):
@@ -328,6 +351,13 @@ def labor_publish_schedule(m, claims, qs, body):
     shifts = body.get("shifts", [])
     db.SCHEDULES.setdefault(site_id, {})["published"] = shifts
     return 200, {"site_id": site_id, "status": "PUBLISHED", "shift_count": len(shifts), "published_by": claims["sub"]}
+
+
+@route("GET", "/labor/sites/{site_id}/schedules")
+def labor_get_schedules(m, claims, qs, body):
+    site_id = m["site_id"]
+    _require_site(claims, site_id)
+    return 200, {"site_id": site_id, "published": db.SCHEDULES.get(site_id, {}).get("published", [])}
 
 
 # --------------------------------------------------------------------- Health

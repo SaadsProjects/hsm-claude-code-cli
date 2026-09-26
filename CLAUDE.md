@@ -38,6 +38,7 @@ python3 -m pytest tests/test_labor_rules.py -k overnight  # a single test
 ruff check .                             # lint (same check the commit hook runs; rules pinned in ruff.toml)
 python3 mcp_server/hsm_tools.py          # run the MCP server standalone over stdio
 mcp dev mcp_server/hsm_tools.py          # MCP Inspector (needs the mcp[cli] extra)
+streamlit run dashboard/app.py           # read-only dashboard (needs the mock backend running)
 ```
 
 Test layout:
@@ -116,6 +117,13 @@ Gating of writes is layered:
    validate at all, since a crashed or timed-out hook fails open. It uses
    `HSM_JURISDICTION` (default `GA`), not the site's jurisdiction.
 3. Hooks only ever deny or fall through (`{}`); they never grant `allow`.
+
+The Streamlit dashboard (`dashboard/app.py`, loaders in `dashboard/data.py`)
+is read-only. It goes through `HsmClient` like the MCP tools and reuses the
+`agents/` calculation functions. Its only POST is the side-effect-free
+`/labor/rules/validate`. It reads published schedules and POs through the GET
+routes `/labor/sites/{site_id}/schedules` and `/inventory/purchase-orders`,
+which the server filters to the persona's scope.
 
 A new gated write tool needs an `ask` rule in `settings.json`, in the same
 way as the existing two.

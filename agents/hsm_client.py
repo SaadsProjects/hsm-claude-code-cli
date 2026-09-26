@@ -99,6 +99,10 @@ class HsmClient:
             body["region_id"] = region_id
         return self._request("POST", "/inventory/purchase-orders", json_body=body)
 
+    def get_purchase_orders(self, site_id=None, region_id=None):
+        params = {k: v for k, v in (("site_id", site_id), ("region_id", region_id)) if v}
+        return self._request("GET", "/inventory/purchase-orders", params=params or None)["purchase_orders"]
+
     # ---- Labor ----------------------------------------------------------------
     def get_employees(self, site_id):
         return self._request("GET", f"/labor/sites/{site_id}/employees")["employees"]
@@ -113,3 +117,6 @@ class HsmClient:
     def publish_schedule(self, site_id, shifts):
         return self._request("POST", f"/labor/sites/{site_id}/schedules/publish",
                               json_body={"shifts": shifts})
+
+    def get_published_schedule(self, site_id):
+        return self._request("GET", f"/labor/sites/{site_id}/schedules")["published"]
