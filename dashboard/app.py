@@ -181,6 +181,11 @@ def overview_tab(bundle, user):
         _po_table(region_pos)
 
 
+def _sum_or_blank(values):
+    """Sum that stays blank when every value is unknown, rather than reading as zero."""
+    return values.sum(min_count=1)
+
+
 def labor_tab(bundle):
     demand = bundle["demand"]
     left, right = st.columns(2)
@@ -210,8 +215,9 @@ def labor_tab(bundle):
         c[0].metric("Shifts", len(sched))
         c[1].metric("Scheduled hours", f'{sched["hours"].sum():,.1f}')
         c[2].metric("Est. straight-time cost", _money(sched["est_cost"].fillna(0).sum()))
-        per_emp = (sched.groupby(["employee_id", "name", "role"], as_index=False)
-                   .agg(shifts=("hours", "size"), hours=("hours", "sum"), est_cost=("est_cost", "sum")))
+        per_emp = (sched.groupby(["employee_id", "name", "role"], as_index=False, dropna=False)
+                   .agg(shifts=("hours", "size"), hours=("hours", _sum_or_blank),
+                        est_cost=("est_cost", _sum_or_blank)))
         st.dataframe(per_emp, hide_index=True, width="stretch")
         with st.expander("All shifts"):
             st.dataframe(sched, hide_index=True, width="stretch")

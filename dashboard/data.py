@@ -81,15 +81,18 @@ def schedule_frame(shifts, employees):
     roster = {e["employee_id"]: e for e in employees}
     rows = []
     for s in shifts:
-        emp = roster.get(s["employee_id"], {})
+        # Published shifts aren't format-checked by the backend, so tolerate missing fields
+        # (each shift is still assumed to be a dict).
+        emp = roster.get(s.get("employee_id"), {})
         try:
-            hours = round(shift_hours(s["start_time"], s["end_time"]), 2)
+            hours = round(shift_hours(s.get("start_time"), s.get("end_time")), 2)
         except (TypeError, ValueError):
-            hours = None  # not HH:MM -- the validator reports it; show the shift without hours
+            hours = None  # missing or not HH:MM -- the validator reports it; show the shift without hours
         rate = emp.get("hourly_rate")
         rows.append({
-            "date": s["date"], "employee_id": s["employee_id"], "name": emp.get("name", "?"),
-            "role": s.get("role", emp.get("job_code")), "start_time": s["start_time"], "end_time": s["end_time"],
+            "date": s.get("date"), "employee_id": s.get("employee_id"), "name": emp.get("name", "?"),
+            "role": s.get("role", emp.get("job_code")), "start_time": s.get("start_time"),
+            "end_time": s.get("end_time"),
             "hours": hours, "est_cost": round(hours * rate, 2) if hours is not None and rate is not None else None,
         })
     columns = ["date", "employee_id", "name", "role", "start_time", "end_time", "hours", "est_cost"]

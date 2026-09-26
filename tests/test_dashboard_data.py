@@ -85,6 +85,15 @@ def test_schedule_frame_tolerates_unparseable_times():
     assert frame["hours"].isna().all() and frame["est_cost"].isna().all()
 
 
+def test_schedule_frame_tolerates_missing_fields():
+    frame = data.schedule_frame([{}, {"employee_id": "emp_unknown"}, SHIFTS[0]], [])
+    assert len(frame) == 3
+    # The complete shift sorts first; the incomplete ones keep what they have, with blank hours.
+    assert frame.loc[0, "employee_id"] == SHIFTS[0]["employee_id"] and frame.loc[0, "hours"] == 8
+    assert frame.loc[1, "employee_id"] == "emp_unknown" and frame.loc[1, "name"] == "?"
+    assert frame.loc[1:, "hours"].isna().all() and frame.loc[1:, "date"].isna().all()
+
+
 def test_loaders_surface_planted_anomaly(base_url):
     client = _client("user_regional_atl", base_url)
     anomalies = data.usage_anomalies(client, "site_001")
@@ -128,6 +137,17 @@ def test_app_survives_unvalidatable_schedule(base_url, monkeypatch, fresh_app_ca
     assert not app.warning, app.warning
     assert any("could not validate" in e.value for e in app.error)
     assert any("On hand vs par" in h.value for h in app.subheader)  # the rest of the page still renders
+
+
+def test_app_keeps_incomplete_shifts_in_per_employee_table(base_url, monkeypatch, fresh_app_cache):
+    # No role and no times: the shift must still be counted, with hours and cost left blank.
+    _client("user_rm_midtown", base_url).publish_schedule("site_001", [SHIFTS[0], {"employee_id": "emp_x"}])
+    app = _run_app(base_url, monkeypatch, "user_rm_midtown")
+    assert not app.exception, app.exception
+    per_emp = next(df.value for df in app.dataframe if "shifts" in df.value.columns)
+    assert set(per_emp["employee_id"]) == {SHIFTS[0]["employee_id"], "emp_x"}
+    unknown = per_emp[per_emp["employee_id"] == "emp_x"].iloc[0]
+    assert unknown["shifts"] == 1 and unknown[["hours", "est_cost"]].isna().all()
 
 
 def test_app_cache_does_not_leak_between_tests(base_url, monkeypatch, fresh_app_cache):
