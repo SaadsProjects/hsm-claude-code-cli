@@ -96,7 +96,9 @@ def schedule_frame(shifts, employees):
             "hours": hours, "est_cost": round(hours * rate, 2) if hours is not None and rate is not None else None,
         })
     columns = ["date", "employee_id", "name", "role", "start_time", "end_time", "hours", "est_cost"]
-    return pd.DataFrame(rows, columns=columns).sort_values(["date", "start_time", "employee_id"], ignore_index=True)
+    # Numeric even when every value is unknown (NaN, not None), so totals over them can't raise.
+    return (pd.DataFrame(rows, columns=columns).astype({"hours": float, "est_cost": float})
+            .sort_values(["date", "start_time", "employee_id"], ignore_index=True))
 
 
 def region_rollup(client: HsmClient, sites):

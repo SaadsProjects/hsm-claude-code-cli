@@ -181,9 +181,9 @@ def overview_tab(bundle, user):
         _po_table(region_pos)
 
 
-def _sum_or_blank(values):
-    """Sum that stays blank when every value is unknown, rather than reading as zero."""
-    return values.sum(min_count=1)
+def _total_or_blank(values):
+    """Sum that stays blank if any value is unknown, rather than reading as a complete (or zero) total."""
+    return values.sum(skipna=False)
 
 
 def labor_tab(bundle):
@@ -213,11 +213,15 @@ def labor_tab(bundle):
         sched = data.schedule_frame(shifts, bundle["employees"])
         c = st.columns(3)
         c[0].metric("Shifts", len(sched))
-        c[1].metric("Scheduled hours", f'{sched["hours"].sum():,.1f}')
-        c[2].metric("Est. straight-time cost", _money(sched["est_cost"].fillna(0).sum()))
+        hours, cost = _total_or_blank(sched["hours"]), _total_or_blank(sched["est_cost"])
+        no_hours, no_cost = sched["hours"].isna().sum(), sched["est_cost"].isna().sum()
+        c[1].metric("Scheduled hours", "—" if pd.isna(hours) else f"{hours:,.1f}",
+                    help=f"{no_hours} shift(s) have no usable start/end time" if no_hours else None)
+        c[2].metric("Est. straight-time cost", "—" if pd.isna(cost) else _money(cost),
+                    help=f"{no_cost} shift(s) lack usable hours or a rostered hourly rate" if no_cost else None)
         per_emp = (sched.groupby(["employee_id", "name", "role"], as_index=False, dropna=False)
-                   .agg(shifts=("hours", "size"), hours=("hours", _sum_or_blank),
-                        est_cost=("est_cost", _sum_or_blank)))
+                   .agg(shifts=("hours", "size"), hours=("hours", _total_or_blank),
+                        est_cost=("est_cost", _total_or_blank)))
         st.dataframe(per_emp, hide_index=True, width="stretch")
         with st.expander("All shifts"):
             st.dataframe(sched, hide_index=True, width="stretch")

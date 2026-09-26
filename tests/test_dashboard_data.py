@@ -7,6 +7,7 @@ import sys
 import threading
 from pathlib import Path
 
+import pandas as pd
 import pytest
 
 sys.path.insert(0, str(Path(__file__).resolve().parent.parent))
@@ -94,6 +95,13 @@ def test_schedule_frame_tolerates_missing_fields():
     assert frame.loc[1:, "hours"].isna().all() and frame.loc[1:, "date"].isna().all()
 
 
+def test_schedule_frame_totals_stay_numeric_when_all_unknown():
+    # All-None columns would be object dtype, where a NaN-propagating sum raises instead of giving NaN.
+    frame = data.schedule_frame([{"employee_id": "a"}, {"employee_id": "b"}], [])
+    assert frame["hours"].dtype == float and frame["est_cost"].dtype == float
+    assert pd.isna(frame["hours"].sum(skipna=False)) and pd.isna(frame["est_cost"].sum(skipna=False))
+
+
 def test_loaders_surface_planted_anomaly(base_url):
     client = _client("user_regional_atl", base_url)
     anomalies = data.usage_anomalies(client, "site_001")
@@ -127,6 +135,8 @@ def test_app_renders(base_url, monkeypatch, fresh_app_cache, user):
     assert [label.split("(")[-1].rstrip(")") for label in app.sidebar.selectbox[1].options] == expected_sites
     assert any("Region roll-up" in h.value for h in app.subheader) == (user == "user_regional_atl")
     assert any("no violations" in s.value for s in app.success)
+    metrics = {m.label: m.value for m in app.metric}
+    assert metrics["Scheduled hours"] == "16.0" and metrics["Est. straight-time cost"].startswith("$")
 
 
 def test_app_survives_unvalidatable_schedule(base_url, monkeypatch, fresh_app_cache):
@@ -139,15 +149,34 @@ def test_app_survives_unvalidatable_schedule(base_url, monkeypatch, fresh_app_ca
     assert any("On hand vs par" in h.value for h in app.subheader)  # the rest of the page still renders
 
 
-def test_app_keeps_incomplete_shifts_in_per_employee_table(base_url, monkeypatch, fresh_app_cache):
-    # No role and no times: the shift must still be counted, with hours and cost left blank.
-    _client("user_rm_midtown", base_url).publish_schedule("site_001", [SHIFTS[0], {"employee_id": "emp_x"}])
+def test_app_blanks_totals_that_include_unknown_hours(base_url, monkeypatch, fresh_app_cache):
+    # emp_x has no role and no times; the cook has one good shift and one with an unparseable time.
+    shifts = [SHIFTS[0], {**SHIFTS[0], "date": "2026-01-06", "start_time": "9am"}, SHIFTS[1], {"employee_id": "emp_x"}]
+    _client("user_rm_midtown", base_url).publish_schedule("site_001", shifts)
     app = _run_app(base_url, monkeypatch, "user_rm_midtown")
     assert not app.exception, app.exception
-    per_emp = next(df.value for df in app.dataframe if "shifts" in df.value.columns)
-    assert set(per_emp["employee_id"]) == {SHIFTS[0]["employee_id"], "emp_x"}
-    unknown = per_emp[per_emp["employee_id"] == "emp_x"].iloc[0]
-    assert unknown["shifts"] == 1 and unknown[["hours", "est_cost"]].isna().all()
+    per_emp = next(df.value for df in app.dataframe if "shifts" in df.value.columns).set_index("employee_id")
+    # Every shift is counted, but only an employee whose hours are all known gets a total.
+    assert per_emp["shifts"].to_dict() == {"emp_site_001_01": 1, "emp_site_001_02": 2, "emp_x": 1}
+    assert per_emp.loc["emp_site_001_01", "hours"] == 8
+    assert per_emp.loc[["emp_site_001_02", "emp_x"], ["hours", "est_cost"]].isna().all(axis=None)
+    metrics = {m.label: m.value for m in app.metric}
+    assert metrics["Shifts"] == "4"
+    assert metrics["Scheduled hours"] == "—" and metrics["Est. straight-time cost"] == "—"
+
+
+def test_app_survives_schedule_with_no_known_totals(base_url, monkeypatch, fresh_app_cache):
+    # Two shifts with no times, and two good shifts for employees not on the roster (so no rate).
+    off_roster = [{**SHIFTS[0], "employee_id": "emp_y"}, {**SHIFTS[0], "employee_id": "emp_y", "date": "2026-01-06"}]
+    shifts = [{"employee_id": "emp_x"}, {"employee_id": "emp_x"}, *off_roster]
+    _client("user_rm_midtown", base_url).publish_schedule("site_001", shifts)
+    app = _run_app(base_url, monkeypatch, "user_rm_midtown")
+    assert not app.exception, app.exception
+    per_emp = next(df.value for df in app.dataframe if "shifts" in df.value.columns).set_index("employee_id")
+    assert per_emp.loc["emp_y", "hours"] == 16 and pd.isna(per_emp.loc["emp_y", "est_cost"])
+    assert per_emp.loc["emp_x", ["hours", "est_cost"]].isna().all()
+    metrics = {m.label: m.value for m in app.metric}
+    assert metrics["Scheduled hours"] == "—" and metrics["Est. straight-time cost"] == "—"
 
 
 def test_app_cache_does_not_leak_between_tests(base_url, monkeypatch, fresh_app_cache):
