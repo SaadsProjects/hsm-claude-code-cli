@@ -180,8 +180,9 @@ ON_HAND = {site_id: dict(_BASE_ON_HAND) for site_id in SITES}
 PAR_LEVELS = {rm_id: round(qty * 1.6) for rm_id, qty in _BASE_ON_HAND.items()}
 REORDER_POINTS = {rm_id: round(qty * 0.5) for rm_id, qty in _BASE_ON_HAND.items()}
 
-# Forecast & actual sales are generated deterministically (seeded RNG) so
-# repeated runs are stable but each site/day differs.
+# Forecast & actual sales come from a seeded RNG, so each site/day differs but
+# the noise is repeatable. Dates (and the Fri/Sat bump) follow the site's
+# current calendar, so the numbers for a given day offset shift day to day.
 _BASE_DAILY_UNITS = {
     "mi_burger": 30, "mi_cheeseburger": 25, "mi_fries": 45, "mi_chicken_sandwich": 20,
     "mi_taco": 28, "mi_burrito": 18, "mi_soda": 50,

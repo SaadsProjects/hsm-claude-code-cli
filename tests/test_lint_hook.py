@@ -137,6 +137,61 @@ def test_unstaged_error_denied_for_commit_all(repo):
     assert _decision(repo_dir, "git commit -am x") == "deny"
 
 
+def test_untracked_error_ignored_for_commit_all(repo):
+    repo_dir, _ = repo
+    (repo_dir / "scratch.py").write_text(LINT_ERROR)  # untracked: -a won't commit it
+    assert _decision(repo_dir, "git commit -am x") is None
+
+
+@pytest.mark.parametrize("command", ["git add . && git commit -am x", "git add scratch.py && git commit -m x",
+                                     "git stage -A; git commit -m x"])
+def test_untracked_error_denied_when_same_command_stages(repo, command):
+    repo_dir, _ = repo
+    (repo_dir / "scratch.py").write_text(LINT_ERROR)
+    assert _decision(repo_dir, command) == "deny"
+
+
+def test_large_untracked_venv_does_not_block_staging_commit(repo):
+    repo_dir, _ = repo
+    venv = repo_dir / "venv" / "lib"  # not gitignored, but in ruff's default excludes
+    venv.mkdir(parents=True)
+    for i in range(3000):
+        (venv / f"m{i}.py").write_text(LINT_ERROR)
+    assert _decision(repo_dir, "git add ok.py && git commit -m x") is None
+
+
+def test_ignored_untracked_file_skipped_when_same_command_stages(repo):
+    repo_dir, _ = repo
+    (repo_dir / ".gitignore").write_text("scratch.py\n")
+    (repo_dir / "scratch.py").write_text(LINT_ERROR)
+    assert _decision(repo_dir, "git add . && git commit -m x") is None
+
+
+@pytest.mark.parametrize(("command", "expected"), [
+    ("git add . && git commit -m x", True),
+    ("git status && git diff && git commit -m x", False),
+    ("git commit -am x", False),
+])
+def test_stages_in_same_command(command, expected):
+    assert hook.stages_in_same_command(command) is expected
+
+
+def test_invalid_worktree_pyproject_denied_for_commit_all(repo):
+    repo_dir, git = repo
+    (repo_dir / "pyproject.toml").write_text('[project]\nname = "x"\nversion = "0.1"\n')
+    git("add", "pyproject.toml")
+    (repo_dir / "pyproject.toml").write_text('[project]\nname = 1\n')  # RUF200
+    assert _decision(repo_dir, "git commit -am x") == "deny"
+
+
+def test_deleted_tracked_file_ignored_for_commit_all(repo):
+    repo_dir, git = repo
+    (repo_dir / "gone.py").write_text("Y = 1\n")
+    git("add", "gone.py")
+    (repo_dir / "gone.py").unlink()
+    assert _decision(repo_dir, "git commit -am x") is None
+
+
 def test_non_commit_passes_through(repo):
     repo_dir, git = repo
     (repo_dir / "bad.py").write_text(LINT_ERROR)

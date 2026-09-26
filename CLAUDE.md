@@ -33,7 +33,7 @@ hooks — rather than a bespoke orchestration script. See
 ```bash
 pip install -r requirements.txt          # Python 3.10+; mcp pinned <2 (code uses 1.x FastMCP API)
 python3 -m mock_hsm.server &             # mock backend on 127.0.0.1:8770 (or scripts/start_mock_server.sh)
-python3 -m pytest tests/ -q              # all tests; they start their own mock servers (:8772, :8773)
+python3 -m pytest tests/ -q              # all tests; they start their own mock servers (:8772, :8773, one ephemeral)
 python3 -m pytest tests/test_labor_rules.py -k overnight  # a single test
 ruff check .                             # lint (same check the commit hook runs; rules pinned in ruff.toml)
 python3 mcp_server/hsm_tools.py          # run the MCP server standalone over stdio
@@ -122,15 +122,25 @@ way as the existing two.
 
 Mock backend state (`mock_hsm/db.py`) is in-memory: published schedules and
 POs reset when the server restarts. Forecast/usage data comes from seeded
-RNG and is deterministic. Some anomalies are planted on purpose (e.g. the
-`rm_ground_beef` drift at site_001, which the test asserts on).
+RNG, but rows are dated from the site's current date and the Fri/Sat bump
+follows the real weekday, so forecast, sales and reorder numbers shift from
+day to day. Usage variance doesn't depend on the weekday bump. Some
+anomalies are planted on purpose (e.g. the `rm_ground_beef` drift at
+site_001, which the test asserts on).
 
 ## Committing changes to this project
 
 Don't run `git commit` directly — go through `/commit`, which runs the
-read-only `code-reviewer` subagent on the staged diff first. The
+`code-reviewer` subagent (no Edit/Write tools) on the staged diff first. The
 `lint_before_commit.py` hook separately blocks the commit if ruff fails on
 what the commit will contain: the staged index (exported to a temp dir),
-plus the working tree for `commit -a`/`-i`/`-o` or pathspecs. So re-stage
-after fixing lint errors. If the reviewer finds something, decide whether
-to address it before committing rather than routing around it.
+plus tracked working-tree files for `commit -a`/`-i`/`-o` or pathspecs, plus
+untracked non-ignored files when the same Bash command also runs a git
+subcommand that can stage (`git add . && git commit ...`). So re-stage
+after fixing lint errors. It runs before the whole command, so files
+edited or staged by a non-git command earlier in it (`sed -i`, a script,
+`make`) aren't seen. It always checks this project's repo and default index, so `git -C`,
+`cd elsewhere &&` or `GIT_INDEX_FILE` commits aren't linted against what
+they actually commit.
+If the reviewer finds something, decide whether to address it before
+committing rather than routing around it.

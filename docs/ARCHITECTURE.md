@@ -126,7 +126,7 @@ sequenceDiagram
         Note over U,T: [gate] permissions.ask prompt (no hook on this tool)
         U-->>T: approve
         T->>API: POST /inventory/purchase-orders
-        API-->>IA: PO (403 if site or region out of scope, or region PO without a regional persona)
+        API-->>IA: PO (403 if site or region out of scope, or region PO without a regional or admin persona)
     end
     IA-->>MC: anomalies, draft POs, capped items
     MC-->>U: report
@@ -163,7 +163,10 @@ sequenceDiagram
         Note over LH: [det] find_commits, quote-aware args plus regex detector
         LH->>G: checkout-index staged index to temp dir, ruff check
         opt -a, -i, -o, pathspec, or unreadable args
-            LH->>G: ruff check on working tree
+            LH->>G: ruff check on tracked working-tree files
+        end
+        opt same command also stages, e.g. git add . && git commit
+            LH->>G: ruff check on tracked and untracked non-ignored files
         end
         alt lint errors, ruff missing, or hook error
             LH-->>MC: deny, fix lint and retry

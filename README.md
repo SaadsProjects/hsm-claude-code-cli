@@ -102,8 +102,9 @@ with the review — and even then, `lint_before_commit.py` independently
 runs `ruff check` as a hard `PreToolUse` gate on the commit itself, so a
 dirty lint result blocks the commit regardless of what the review
 concluded or what a human approved. It lints what the commit will
-actually contain (the staged index, plus the working tree for `commit -a`
-or pathspecs). Install `ruff` (already in `requirements.txt`): if the hook
+actually contain in this project's repo: the staged index, plus tracked
+working-tree files for `commit -a` or pathspecs, plus untracked files when
+the same command also stages (`git add . && git commit`). Install `ruff` (already in `requirements.txt`): if the hook
 can't find it on PATH, in `.venv/bin`, or as `python -m ruff`, it blocks
 the commit rather than letting it through unchecked.
 

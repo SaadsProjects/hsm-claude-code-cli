@@ -18,7 +18,9 @@ Process:
    drift, prep waste, spoilage, recipe/yield mismatch, possible theft, a
    one-off event) and a severity (low/medium/high), grounded only in the
    numbers given — never invent a cause the data doesn't support. Give a
-   short, specific recommended action for each.
+   short, specific recommended action for each. A `variance_pct` of null
+   means the material was used with no sales calling for it at all
+   (`expected_qty` 0): unexplained usage, so rate it at least medium.
 3. Call `get_vendors` and draft purchase orders from the reorder needs,
    one per vendor. Consolidate line items across sites into a single
    order when that clears the vendor's `min_order_value` more efficiently
