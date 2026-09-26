@@ -349,6 +349,8 @@ def labor_publish_schedule(m, claims, qs, body):
     if claims["persona"] not in ("RESTAURANT_MANAGER", "REGIONAL_MANAGER"):
         raise ApiError(403, "persona cannot publish schedules")
     shifts = body.get("shifts", [])
+    if not isinstance(shifts, list):  # checked before storing, so a bad publish leaves nothing behind
+        raise ApiError(400, "shifts must be a list")
     db.SCHEDULES.setdefault(site_id, {})["published"] = shifts
     return 200, {"site_id": site_id, "status": "PUBLISHED", "shift_count": len(shifts), "published_by": claims["sub"]}
 

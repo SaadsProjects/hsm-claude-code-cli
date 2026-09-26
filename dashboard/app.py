@@ -54,7 +54,7 @@ def load_site_bundle(user_id, site_id, demand_offset):
     employees = client.get_employees(site_id)
     shifts = client.get_published_schedule(site_id)
     validation = None
-    if shifts:
+    if shifts and isinstance(shifts, list):  # a non-list is reported by labor_tab; nothing to validate
         try:
             validation = client.validate_schedule(site["jurisdiction"], shifts)
         except HsmApiError as e:
@@ -198,7 +198,10 @@ def labor_tab(bundle):
 
     st.subheader("Published schedule")
     shifts = bundle["shifts"]
-    if not shifts:
+    if not isinstance(shifts, list):
+        # Another backend may not reject this at publish time the way the mock now does.
+        st.error(f"✖ The published schedule is malformed: expected a list of shifts, got {type(shifts).__name__}")
+    elif not shifts:
         st.info("No schedule has been published for this site yet.")
     else:
         validation = bundle["validation"]

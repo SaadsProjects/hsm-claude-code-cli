@@ -67,6 +67,16 @@ def test_published_schedule_round_trip_and_scope(base_url):
     assert exc.value.status == 403
 
 
+@pytest.mark.parametrize("bad", [5, "abc", {"employee_id": "emp_site_001_02"}, None])
+def test_publish_rejects_non_list_shifts_without_storing(base_url, bad):
+    rm = _client("user_rm_midtown", base_url)
+    rm.publish_schedule("site_001", SHIFTS)
+    with pytest.raises(HsmApiError) as exc:
+        rm.publish_schedule("site_001", bad)
+    assert exc.value.status == 400
+    assert rm.get_published_schedule("site_001") == SHIFTS  # the earlier schedule is untouched
+
+
 def test_shift_hours_handles_overnight():
     assert data.shift_hours("09:00", "17:00") == 8
     assert data.shift_hours("22:00", "06:00") == 8
@@ -100,6 +110,25 @@ def test_schedule_frame_totals_stay_numeric_when_all_unknown():
     frame = data.schedule_frame([{"employee_id": "a"}, {"employee_id": "b"}], [])
     assert frame["hours"].dtype == float and frame["est_cost"].dtype == float
     assert pd.isna(frame["hours"].sum(skipna=False)) and pd.isna(frame["est_cost"].sum(skipna=False))
+
+
+def test_schedule_frame_tolerates_malformed_shifts():
+    shifts = ["junk", None, {"employee_id": ["a"], "date": ["x"], "start_time": 900, "end_time": "17:00"},
+              {"employee_id": {"id": 1}}, SHIFTS[0]]
+    frame = data.schedule_frame(shifts, [])
+    assert len(frame) == 5
+    # Non-text values are shown as text; a non-dict entry is a shift with nothing known.
+    listed = frame[frame["employee_id"] == "['a']"].iloc[0]
+    assert listed["date"] == "['x']" and listed["start_time"] == "900" and pd.isna(listed["hours"])
+    assert "{'id': 1}" in set(frame["employee_id"])
+    assert frame["employee_id"].isna().sum() == 2 and frame["hours"].notna().sum() == 1
+
+
+def test_schedule_frame_falls_back_to_roster_role_when_blank():
+    employees = [e for e in db.EMPLOYEES.values() if e["site_id"] == "site_001"]
+    shifts = [{**SHIFTS[0], "role": None}, {**SHIFTS[0], "date": "2026-01-06", "role": ""}]
+    frame = data.schedule_frame(shifts, employees)
+    assert list(frame["role"]) == ["JC-COOK", "JC-COOK"]  # emp_site_001_02's roster job code
 
 
 def test_loaders_surface_planted_anomaly(base_url):
@@ -177,6 +206,29 @@ def test_app_survives_schedule_with_no_known_totals(base_url, monkeypatch, fresh
     assert per_emp.loc["emp_x", ["hours", "est_cost"]].isna().all()
     metrics = {m.label: m.value for m in app.metric}
     assert metrics["Scheduled hours"] == "—" and metrics["Est. straight-time cost"] == "—"
+
+
+def test_app_survives_malformed_shifts(base_url, monkeypatch, fresh_app_cache):
+    # Non-dict entries and list/dict values, published straight through the API.
+    shifts = [SHIFTS[0], "junk", None, {"employee_id": ["a"], "date": ["x"], "start_time": 900}]
+    _client("user_rm_midtown", base_url).publish_schedule("site_001", shifts)
+    app = _run_app(base_url, monkeypatch, "user_rm_midtown")
+    assert not app.exception, app.exception
+    assert any("could not validate" in e.value for e in app.error)
+    per_emp = next(df.value for df in app.dataframe if "shifts" in df.value.columns)
+    assert per_emp["shifts"].sum() == 4 and "['a']" in set(per_emp["employee_id"])
+    assert {m.label: m.value for m in app.metric}["Shifts"] == "4"
+
+
+@pytest.mark.parametrize("bad", [5, "abc", {"employee_id": "emp_site_001_02"}, None])
+def test_app_reports_non_list_published_schedule(base_url, monkeypatch, fresh_app_cache, bad):
+    # The mock now rejects these at publish time, but another backend might not: plant one directly.
+    db.SCHEDULES["site_001"] = {"published": bad}
+    app = _run_app(base_url, monkeypatch, "user_rm_midtown")
+    assert not app.exception, app.exception
+    assert any("published schedule is malformed" in e.value for e in app.error)
+    assert not any("shifts" in df.value.columns for df in app.dataframe)  # no bogus shift tables
+    assert any("On hand vs par" in h.value for h in app.subheader)  # the rest of the page still renders
 
 
 def test_app_cache_does_not_leak_between_tests(base_url, monkeypatch, fresh_app_cache):

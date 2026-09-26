@@ -76,13 +76,23 @@ def shift_hours(start_time, end_time):
     return (end - start).total_seconds() / 3600
 
 
+def _shift_field(shift, key):
+    """A published shift's field as text (None if absent), so sorting, grouping and roster lookups can't
+    trip over lists or numbers. The value's text still shows for diagnosis, though values with the same
+    text (e.g. employee_id 1 and "1") become indistinguishable."""
+    value = shift.get(key)
+    return value if value is None or isinstance(value, str) else str(value)
+
+
 def schedule_frame(shifts, employees):
     """Published shifts joined to the roster, with hours and estimated straight-time cost per shift."""
     roster = {e["employee_id"]: e for e in employees}
     rows = []
-    for s in shifts:
-        # Published shifts aren't format-checked by the backend, so tolerate missing fields
-        # (each shift is still assumed to be a dict).
+    for raw in shifts:
+        # Published shifts aren't format-checked by the backend: a non-dict entry becomes a shift with no
+        # fields, and non-text field values are shown as text.
+        fields = ("date", "employee_id", "role", "start_time", "end_time")
+        s = {k: _shift_field(raw, k) for k in fields} if isinstance(raw, dict) else {}
         emp = roster.get(s.get("employee_id"), {})
         try:
             hours = round(shift_hours(s.get("start_time"), s.get("end_time")), 2)
@@ -91,7 +101,7 @@ def schedule_frame(shifts, employees):
         rate = emp.get("hourly_rate")
         rows.append({
             "date": s.get("date"), "employee_id": s.get("employee_id"), "name": emp.get("name", "?"),
-            "role": s.get("role", emp.get("job_code")), "start_time": s.get("start_time"),
+            "role": s.get("role") or emp.get("job_code"), "start_time": s.get("start_time"),
             "end_time": s.get("end_time"),
             "hours": hours, "est_cost": round(hours * rate, 2) if hours is not None and rate is not None else None,
         })
