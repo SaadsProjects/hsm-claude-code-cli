@@ -36,6 +36,19 @@ The first time you start `claude` in this directory it will ask to
 approve the project's `.mcp.json` server (`hsm`) — approve it, since
 that's what exposes the HSM tools.
 
+### Read-only dashboard
+
+```bash
+# with the mock backend running (or HSM_BASE_URL pointing elsewhere)
+streamlit run dashboard/app.py
+```
+
+A Streamlit view of forecasts, labor demand, rosters, published schedules
+(with a Labor Rules Engine compliance check), on-hand stock, usage
+anomalies, reorder needs and submitted POs. Pick a persona in the sidebar
+(it defaults to `HSM_ACTIVE_USER`). The backend's site/region scope
+decides what that persona can see. The dashboard never publishes or submits.
+
 ## What's real vs. what's a sketch
 
 Everything in this project was built and verified in this environment:
@@ -81,6 +94,7 @@ agents/hsm_client.py            REST client used by the MCP tools
 agents/labor_scheduling_agent.py   pure demand-calculation function only
 agents/inventory_agent.py          pure anomaly/reorder-calculation functions only
 mcp_server/hsm_tools.py         MCP server: wraps the above as tools
+dashboard/                      read-only Streamlit dashboard (app.py UI, data.py loaders)
 .mcp.json                       registers the hsm MCP server for this project
 .claude/agents/                 labor-scheduler.md, inventory-analyst.md, code-reviewer.md
 .claude/commands/               /schedule-labor, /review-inventory, /commit

@@ -21,4 +21,4 @@ select = [
 ]
 
 [lint.isort]
-known-first-party = ["agents", "mcp_server", "mock_hsm"]
+known-first-party = ["agents", "dashboard", "mcp_server", "mock_hsm"]

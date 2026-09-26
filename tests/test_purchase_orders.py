@@ -127,3 +127,20 @@ def test_scope_enforced_over_http(http_client, monkeypatch):
         with pytest.raises(HsmApiError) as exc:
             client.submit_purchase_order("vendor_protein_co", LINES, **kwargs)
         assert exc.value.status == status
+
+
+def test_po_listing_is_scoped_over_http(http_client):
+    regional, rm = http_client("user_regional_atl"), http_client("user_rm_midtown")
+    regional.submit_purchase_order("vendor_protein_co", LINES, region_id="region_atl")
+    regional.submit_purchase_order("vendor_protein_co", LINES, site_id="site_002")
+    rm.submit_purchase_order("vendor_protein_co", LINES, site_id="site_001")
+
+    assert len(regional.get_purchase_orders()) == 3
+    assert [po["site_id"] for po in regional.get_purchase_orders(site_id="site_002")] == ["site_002"]
+    assert [po["region_id"] for po in regional.get_purchase_orders(region_id="region_atl")] == ["region_atl"]
+    # A Restaurant Manager sees only its own site's POs -- not other sites', not region-level ones.
+    assert [po["site_id"] for po in rm.get_purchase_orders()] == ["site_001"]
+    for kwargs in ({"site_id": "site_002"}, {"region_id": "region_atl"}):
+        with pytest.raises(HsmApiError) as exc:
+            rm.get_purchase_orders(**kwargs)
+        assert exc.value.status == 403
