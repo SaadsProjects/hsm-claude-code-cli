@@ -1,11 +1,15 @@
 """
-Read-only Streamlit dashboard over the HSM labor and inventory services.
+Streamlit dashboard over the HSM labor and inventory services.
 
     python3 -m mock_hsm.server &          # or point HSM_BASE_URL at another backend
-    streamlit run dashboard/app.py
+    streamlit run dashboard/app.py --server.address 127.0.0.1
 
-Every read goes through HsmClient with a token minted for the selected
-persona, so the backend's site/region scope decides what is visible. The
+The user logs in as a persona (a backend session); the tabs appear only while
+logged in. Every read and write goes through HsmClient with a token minted for
+the logged-in persona, so the backend's site/region scope and write rules
+decide what is visible and what is saved. Overview, Labor and Inventory are
+read-only; Manage data adds, edits, deletes and bulk-uploads reference data,
+and Audit lists the audit trail (unit U4; see dashboard/README.md). The
 dashboard never publishes schedules or submits purchase orders.
 """
 import os
@@ -19,9 +23,9 @@ import altair as alt
 import pandas as pd
 import streamlit as st
 
-from agents.hsm_client import HSM_BASE_URL, HsmApiError, HsmClient
-from dashboard import data
-from mock_hsm.auth import mint_token
+from agents.hsm_client import HSM_BASE_URL, HsmApiError
+from dashboard import actions, audit_tab, data, manage_tab, session
+from dashboard.safe_text import escape_md
 
 # Persona list for the picker. Token minting is already tied to the mock's
 # user table (mock_hsm.auth), so reading it here adds no new coupling; no
@@ -39,7 +43,9 @@ ROLE_TITLES = {"JC-LEAD": "Shift Lead", "JC-COOK": "Cook", "JC-SERVER": "Server"
 
 # ------------------------------------------------------------------ loaders
 def _client(user_id):
-    return HsmClient(mint_token(user_id))
+    # One factory for every client, so the screen tests point every read and
+    # write at their own backend with one patch (NFR6.2).
+    return session.client_for(user_id)
 
 
 @st.cache_data(ttl=CACHE_TTL_SECONDS, show_spinner=False)
@@ -285,18 +291,101 @@ def _po_table(pos):
     st.dataframe(df.drop(columns=["line_items"]), hide_index=True, width="stretch")
 
 
+# ------------------------------------------------- login, banner, notice (U4)
+PERSONA_KEY = "session-persona"
+# Every button below runs its action inline and then reruns, so the next
+# completed render shows the outcome (NFR2.3, NFR-design Q2: B).
+
+
+def _login_panel():
+    """Logged out: only the persona selector and Log in (WF1)."""
+    user_ids = list(USERS)
+    default_user = os.environ.get("HSM_ACTIVE_USER")
+    st.selectbox("Persona", user_ids, index=user_ids.index(default_user) if default_user in user_ids else 0,
+                 key=PERSONA_KEY, format_func=lambda u: USERS[u]["name"])
+    if st.button("Log in", key="session-login", type="primary"):
+        actions.then_rerun(actions.log_in, st.session_state[PERSONA_KEY])
+
+
+def _session_panel(login):
+    """Logged in: who is logged in, and Log out (WF3). Log out always ends
+    the login at once; a held write is dropped and the logged-out page says
+    so (NFR2.4 as amended by NFR-design Q1: B)."""
+    name = USERS.get(login["user_id"], {}).get("name", login["user_id"])
+    st.caption(f"Logged in as {escape_md(name)} ({escape_md(login['persona'])})")
+    if st.button("Log out", key="session-logout"):
+        actions.then_rerun(actions.log_out)
+
+
+def _banner():
+    """The unsaved-write banner (WF8), drawn above the tabs on every run."""
+    held = session.pending_retry()
+    if held is None or actions.retry_expired():
+        return
+    st.warning(f"We couldn't confirm this was saved ({escape_md(held.get('describe'))}).")
+    again, drop = st.columns(2)
+    if again.button("Try again", key="notice-try-again"):
+        actions.then_rerun(actions.try_again)
+    if drop.button("Discard", key="notice-discard"):
+        actions.then_rerun(actions.discard)
+
+
+def _notice_panel():
+    """The last outcome (WF7): the message, any problems, and Reload for a stale record."""
+    notice = session.notice()
+    if not notice:
+        return
+    level = notice["level"]
+    if level == "success":
+        st.success(escape_md(notice["message"]))
+    elif level == "error":
+        st.error(escape_md(notice["message"]))
+    elif level == "warning":
+        st.warning(escape_md(notice["message"]))
+    else:
+        st.info(escape_md(notice["message"]))
+    if notice["problems"]:
+        problems = pd.DataFrame(notice["problems"])
+        st.dataframe(problems[[c for c in ("row", "field", "reason") if c in problems]], hide_index=True)
+    if notice.get("note"):
+        st.caption(escape_md(notice["note"]))
+    if notice.get("stale") and st.button("Reload", key="notice-reload"):
+        actions.then_rerun(actions.reload)
+
+
+def _guarded_tab(draw, *args):
+    """Anything unexpected is shown in place of the part that failed; the
+    login and the other tabs are kept (WF7)."""
+    try:
+        draw(*args)
+    except Exception as e:  # noqa: BLE001 -- shown in place of the tab
+        st.error(f"Something went wrong: {escape_md(type(e).__name__)}")
+
+
 # --------------------------------------------------------------------- main
 def main():
     st.set_page_config(page_title="HSM Dashboard", layout="wide")
     st.title("HSM labor & inventory")
 
+    problem = actions.check_session()  # every run while logged in; may log out (WF2)
+    login = session.login()
     with st.sidebar:
-        user_ids = list(USERS)
-        default_user = os.environ.get("HSM_ACTIVE_USER")
-        user_id = st.selectbox("Persona", user_ids,
-                               index=user_ids.index(default_user) if default_user in user_ids else 0,
-                               format_func=lambda u: USERS[u]["name"])
-        user = USERS[user_id]
+        if login is None:
+            _login_panel()
+        else:
+            _session_panel(login)
+    _banner()
+    _notice_panel()
+    if login is None:
+        st.info("Log in to see the dashboard.")
+        return
+    if problem is not None:
+        st.error(escape_md(problem))
+        return
+
+    user_id = login["user_id"]
+    user = USERS[user_id]
+    with st.sidebar:
         sites = load_sites(user_id)
         if not sites:
             st.warning("This persona has no sites in scope.")
@@ -305,22 +394,26 @@ def main():
                                format_func=lambda s: next(x["name"] for x in sites if x["site_id"] == s) + f" ({s})")
         week = st.radio("Labor demand week", ["This week", "Next week"], index=1, horizontal=True)
         if st.button("Refresh data"):
-            st.cache_data.clear()
-            st.rerun()
-        st.caption(f"Backend: {HSM_BASE_URL} · read-only · cached {CACHE_TTL_SECONDS}s")
+            # The shared cache and this session's Manage data reads (Q3: B).
+            actions.then_rerun(actions.clear_cached_reads)
+        st.caption(f"Backend: {HSM_BASE_URL} · cached {CACHE_TTL_SECONDS}s")
 
     with st.spinner("Loading…"):
         bundle = load_site_bundle(user_id, site_id, 0 if week == "This week" else 7)
     site = bundle["site"]
     st.caption(f'{site["name"]} · {site_id} · {site["jurisdiction"]} · {site["timezone"]}')
 
-    overview, labor, inventory = st.tabs(["Overview", "Labor", "Inventory"])
+    overview, labor, inventory, manage, audit = st.tabs(["Overview", "Labor", "Inventory", "Manage data", "Audit"])
     with overview:
         overview_tab(bundle, user)
     with labor:
         labor_tab(bundle)
     with inventory:
         inventory_tab(bundle)
+    with manage:
+        _guarded_tab(manage_tab.render, user, site_id)
+    with audit:
+        _guarded_tab(audit_tab.render)
 
 
 def run():

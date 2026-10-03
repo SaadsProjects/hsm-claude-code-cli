@@ -34,11 +34,12 @@ hooks — rather than a bespoke orchestration script. See
 pip install -r requirements.txt          # Python 3.10+; mcp pinned <2 (code uses 1.x FastMCP API)
 python3 -m mock_hsm.server &             # mock backend on 127.0.0.1:8770 (or scripts/start_mock_server.sh)
 python3 -m pytest tests/ -q              # all tests; they start their own mock servers (:8772, :8773, one ephemeral)
+python3 -m pytest tests/ -q -m perf      # the timing tests, which are skipped by default
 python3 -m pytest tests/test_labor_rules.py -k overnight  # a single test
 ruff check .                             # lint (same check the commit hook runs; rules pinned in ruff.toml)
 python3 mcp_server/hsm_tools.py          # run the MCP server standalone over stdio
 mcp dev mcp_server/hsm_tools.py          # MCP Inspector (needs the mcp[cli] extra)
-streamlit run dashboard/app.py           # read-only dashboard (needs the mock backend running)
+streamlit run dashboard/app.py           # dashboard with login and data writes (needs the mock backend running)
 ```
 
 Test layout:
@@ -119,11 +120,26 @@ Gating of writes is layered:
 3. Hooks only ever deny or fall through (`{}`); they never grant `allow`.
 
 The Streamlit dashboard (`dashboard/app.py`, loaders in `dashboard/data.py`)
-is read-only. It goes through `HsmClient` like the MCP tools and reuses the
-`agents/` calculation functions. Its only POST is the side-effect-free
-`/labor/rules/validate`. It reads published schedules and POs through the GET
-routes `/labor/sites/{site_id}/schedules` and `/inventory/purchase-orders`,
-which the server filters to the persona's scope.
+goes through `HsmClient` like the MCP tools and reuses the `agents/`
+calculation functions. Its Overview, Labor and Inventory tabs are read-only;
+their only POST is the side-effect-free `/labor/rules/validate`. Published
+schedules and POs are read through the GET routes
+`/labor/sites/{site_id}/schedules` and `/inventory/purchase-orders`, which the
+server filters to the persona's scope.
+
+After a login (`POST /sessions`), the dashboard can also write. Its "Manage
+data" tab adds, edits, deletes and bulk-uploads (CSV) 11 kinds of record
+through the per-kind routes in `mock_hsm/writes.py`. Its "Audit" tab pages
+through `GET /audit`. The modules are `dashboard/actions.py`, `session.py`,
+`manage_tab.py`, `audit_tab.py`, `kind_forms.py`, `csv_rows.py` and
+`safe_text.py`; `dashboard/README.md` covers them. The dashboard never
+publishes a schedule or submits a PO, and a test enforces that.
+
+Every data write, and every publish or PO attempt, is appended to an audit
+trail (`mock_hsm/audit.py`, file from `HSM_AUDIT_PATH`, default
+`mock_hsm/audit/audit.jsonl`, gitignored). If the trail is unavailable, the
+publish and PO routes return 503 "audit unavailable", which reaches the MCP
+tools as an error. Tests point the trail at a temp file through `tests/conftest.py`.
 
 A new gated write tool needs an `ask` rule in `settings.json`, in the same
 way as the existing two.
