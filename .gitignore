@@ -4,5 +4,3 @@ __pycache__/
 .pytest_cache/
 .ruff_cache/
 .claude/settings.local.json
-# Audit trail data written by the mock backend (HSM_AUDIT_PATH default)
-mock_hsm/audit/

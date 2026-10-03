@@ -41,18 +41,7 @@ USERS = {
     "user_regional_atl": {"user_id": "user_regional_atl", "name": "Sam (Regional Manager)",
                            "persona": "REGIONAL_MANAGER", "org_id": "org_001",
                            "site_ids": ["site_001", "site_002", "site_003"], "region_id": "region_atl"},
-    # Developer/tester login for the dashboard data writes (U1, BR2.1): the
-    # Regional Manager's persona value and scope, told apart in the audit
-    # trail by its own user id. The gated routes check persona values, so
-    # they treat it exactly like the Regional Manager.
-    "user_dev_tester": {"user_id": "user_dev_tester", "name": "Dev (Developer/Tester)",
-                         "persona": "REGIONAL_MANAGER", "org_id": "org_001",
-                         "site_ids": ["site_001", "site_002", "site_003"], "region_id": "region_atl"},
 }
-
-# The fixed, read-only GL code list (BR5.2). GET /sales/gl-codes returns
-# exactly these, and a dashboard-added menu item may use only these.
-GL_CODES = ("GL-BEV", "GL-FOOD")
 
 UOM = {
     "lb": {"uom_id": "lb", "name": "pound", "base": "oz", "factor_to_base": 16},

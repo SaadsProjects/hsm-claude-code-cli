@@ -1,7 +1,7 @@
 mcp[cli]>=1.0.0,<2
 ruff
 pytest
-streamlit>=1.64  # dashboard/ UI only (AppTest tests run on 1.64); brings pandas and altair
+streamlit>=1.50  # dashboard/ UI only; brings pandas and altair
 
 # The mock HSM server and REST client are otherwise stdlib-only
 # (http.server, urllib). `mcp` (the official Model Context Protocol Python
