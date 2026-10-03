@@ -1,5 +1,6 @@
 ---
 name: code-reviewer
+display_name: Code Reviewer
 description: Independent review of staged changes before commit -- correctness, security, and consistency with the rest of the codebase. Use before committing, or whenever a second, unbiased read on a diff is wanted.
 tools: Read, Grep, Glob, Bash
 model: inherit

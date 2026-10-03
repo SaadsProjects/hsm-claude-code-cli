@@ -1,5 +1,6 @@
 ---
 name: labor-scheduler
+display_name: Labor Scheduler
 description: Builds and iterates a compliant weekly labor schedule for one HSM site, given a sales forecast, employee roster, and jurisdiction labor rules. Use when asked to draft, review, or publish next week's schedule for a specific site.
 tools: mcp__hsm__compute_labor_demand, mcp__hsm__get_employees, mcp__hsm__get_labor_rules, mcp__hsm__validate_schedule, mcp__hsm__publish_schedule
 model: inherit

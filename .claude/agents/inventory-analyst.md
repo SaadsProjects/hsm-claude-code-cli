@@ -1,5 +1,6 @@
 ---
 name: inventory-analyst
+display_name: Inventory Analyst
 description: Reviews raw-material usage/COGS anomalies across sites in a region and drafts vendor purchase orders from forecasted demand and reorder points. Use when asked to review inventory, investigate COGS variance, or draft/submit purchase orders.
 tools: mcp__hsm__compute_usage_anomalies, mcp__hsm__compute_reorder_needs, mcp__hsm__get_vendors, mcp__hsm__submit_purchase_order
 model: inherit
