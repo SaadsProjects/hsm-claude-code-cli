@@ -14,6 +14,7 @@ Run standalone for a protocol smoke test:
 
 Registered with Claude Code via .mcp.json in the project root.
 """
+
 import os
 import sys
 from pathlib import Path
@@ -28,14 +29,17 @@ from agents.inventory_agent import compute_usage_anomalies as _compute_usage_ano
 from agents.labor_scheduling_agent import compute_demand
 from mock_hsm.auth import mint_token
 
-mcp = FastMCP("hsm", instructions=(
-    "Tools for HSM (restaurant back-office) labor scheduling and inventory/"
-    "COGS review. Deterministic calculations (demand, variance, reorder "
-    "points, labor-rule validation) are computed by these tools, not by "
-    "the calling model -- always call the relevant tool rather than "
-    "estimating these numbers yourself. publish_schedule and "
-    "submit_purchase_order have real effects and are permission-gated."
-))
+mcp = FastMCP(
+    "hsm",
+    instructions=(
+        "Tools for HSM (restaurant back-office) labor scheduling and inventory/"
+        "COGS review. Deterministic calculations (demand, variance, reorder "
+        "points, labor-rule validation) are computed by these tools, not by "
+        "the calling model -- always call the relevant tool rather than "
+        "estimating these numbers yourself. publish_schedule and "
+        "submit_purchase_order have real effects and are permission-gated."
+    ),
+)
 
 
 def _client() -> HsmClient:
@@ -150,7 +154,9 @@ def publish_schedule(site_id: str, shifts: list) -> dict:
 
 
 @mcp.tool()
-def submit_purchase_order(vendor_id: str, line_items: list, site_id: str | None = None, region_id: str | None = None) -> dict:
+def submit_purchase_order(
+    vendor_id: str, line_items: list, site_id: str | None = None, region_id: str | None = None
+) -> dict:
     """WRITE / GATED. Submits a purchase order to a vendor. Permission-gated
     in .claude/settings.json. Only call this when the user has explicitly
     asked you to submit, and never for a line item you have reason to

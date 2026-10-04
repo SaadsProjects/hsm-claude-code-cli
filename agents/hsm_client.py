@@ -7,6 +7,7 @@ server); pointed at a real HSM deployment, this file does not change --
 only HSM_BASE_URL and the token source (mock_hsm.auth -> a real OIDC/Apigee
 client) would.
 """
+
 import http.client
 import json
 import os
@@ -31,8 +32,12 @@ RETRY_WINDOW = timedelta(minutes=14)
 # bare TimeoutError. HTTPError is a URLError but is an answer, so it is caught
 # first. Anything else (InvalidURL included) is a caller bug and propagates.
 _TRANSPORT_ERRORS = (
-    urllib.error.URLError, TimeoutError, ConnectionError,
-    http.client.RemoteDisconnected, http.client.IncompleteRead, http.client.BadStatusLine,
+    urllib.error.URLError,
+    TimeoutError,
+    ConnectionError,
+    http.client.RemoteDisconnected,
+    http.client.IncompleteRead,
+    http.client.BadStatusLine,
 )
 
 _NO_ACTIVE_SESSION = "no active session"
@@ -148,6 +153,7 @@ class HsmClient:
         url = f"{self.base_url}{path}"
         if params:
             from urllib.parse import urlencode
+
             url += "?" + urlencode(params, doseq=True)
         data = json.dumps(json_body).encode() if json_body is not None else None
         req = urllib.request.Request(url, data=data, method=method)
@@ -178,13 +184,17 @@ class HsmClient:
 
     # ---- Forecast (AI/ML -> BigQuery) --------------------------------------
     def get_forecast(self, site_id, start_offset_days=0, days=7):
-        return self._request("GET", f"/forecast/sites/{site_id}/sales",
-                              params={"start_offset_days": start_offset_days, "days": days})["forecast"]
+        return self._request(
+            "GET", f"/forecast/sites/{site_id}/sales", params={"start_offset_days": start_offset_days, "days": days}
+        )["forecast"]
 
     # ---- Transaction Data ---------------------------------------------------
     def get_actual_sales(self, site_id, start_offset_days=-7, days=7):
-        return self._request("GET", f"/transaction-data/sites/{site_id}/sales",
-                              params={"start_offset_days": start_offset_days, "days": days})["actual_sales"]
+        return self._request(
+            "GET",
+            f"/transaction-data/sites/{site_id}/sales",
+            params={"start_offset_days": start_offset_days, "days": days},
+        )["actual_sales"]
 
     # ---- Inventory ----------------------------------------------------------
     def get_raw_materials(self):
@@ -200,8 +210,9 @@ class HsmClient:
         return self._request("GET", f"/inventory/sites/{site_id}/on-hand")
 
     def get_usage(self, site_id, start_offset_days=-7, days=7):
-        return self._request("GET", f"/inventory/sites/{site_id}/usage",
-                              params={"start_offset_days": start_offset_days, "days": days})
+        return self._request(
+            "GET", f"/inventory/sites/{site_id}/usage", params={"start_offset_days": start_offset_days, "days": days}
+        )
 
     def submit_purchase_order(self, vendor_id, line_items, site_id=None, region_id=None):
         body = {"vendor_id": vendor_id, "line_items": line_items}
@@ -223,12 +234,12 @@ class HsmClient:
         return self._request("GET", "/labor/rules", params={"jurisdiction": jurisdiction})
 
     def validate_schedule(self, jurisdiction, shifts):
-        return self._request("POST", "/labor/rules/validate",
-                              json_body={"jurisdiction": jurisdiction, "shifts": shifts})
+        return self._request(
+            "POST", "/labor/rules/validate", json_body={"jurisdiction": jurisdiction, "shifts": shifts}
+        )
 
     def publish_schedule(self, site_id, shifts):
-        return self._request("POST", f"/labor/sites/{site_id}/schedules/publish",
-                              json_body={"shifts": shifts})
+        return self._request("POST", f"/labor/sites/{site_id}/schedules/publish", json_body={"shifts": shifts})
 
     def get_published_schedule(self, site_id):
         return self._request("GET", f"/labor/sites/{site_id}/schedules")["published"]
@@ -325,14 +336,14 @@ class HsmClient:
     def update_record(self, kind, record_id, record, version, session_id, site_id=None, request_id=None):
         """Returns ``{record, meta}``. ``version`` is the one the caller read."""
         _, collection = _kind_route(kind, site_id)
-        return self._write("PUT", f"{collection}/{_quoted(record_id)}",
-                           {"record": record, "version": version}, session_id, request_id)
+        return self._write(
+            "PUT", f"{collection}/{_quoted(record_id)}", {"record": record, "version": version}, session_id, request_id
+        )
 
     def delete_record(self, kind, record_id, version, session_id, site_id=None, request_id=None):
         """Returns ``{deleted, kind, record_id}``. The version goes in a JSON body."""
         _, collection = _kind_route(kind, site_id)
-        return self._write("DELETE", f"{collection}/{_quoted(record_id)}",
-                           {"version": version}, session_id, request_id)
+        return self._write("DELETE", f"{collection}/{_quoted(record_id)}", {"version": version}, session_id, request_id)
 
     def bulk_add(self, kind, rows, file_name, session_id, site_id=None, request_id=None):
         """Adds the rows of one CSV file, all or none (BR4.2). ``rows`` are
@@ -377,6 +388,7 @@ class HsmClient:
 
 # ---- Sender helpers ---------------------------------------------------------
 
+
 def _no_answer_message(reason):
     # Only the exception type name or "invalid response body": never the
     # partial bytes of a cut-off reply.
@@ -386,8 +398,9 @@ def _no_answer_message(reason):
 def _outcome_unknown(request, request_id, retry_deadline, reason):
     """The public error for a write with no answer, its retry request kept
     in RetryStore rather than on the error (NFR1.2)."""
-    error = HsmUnavailable(_no_answer_message(reason), outcome_unknown=True,
-                           request_id=request_id, retry_deadline=retry_deadline)
+    error = HsmUnavailable(
+        _no_answer_message(reason), outcome_unknown=True, request_id=request_id, retry_deadline=retry_deadline
+    )
     _RETRY_STORE[error] = request
     return error
 
@@ -418,6 +431,7 @@ def _error_from_reply(error, write):
 
 # ---- Paths ------------------------------------------------------------------
 
+
 def _quoted(value):
     """A path segment that can't change the route (NFR1.1)."""
     return quote(value, safe="")
@@ -438,6 +452,7 @@ def _kind_route(kind, site_id):
 
 
 # ---- Reshaper ---------------------------------------------------------------
+
 
 def _reshape(kind, payload, site_id=None):
     """``{records, meta}`` for list_records (BR4.1). A list payload is used

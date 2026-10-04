@@ -3,6 +3,7 @@ Unit tests for the deterministic calculations behind the MCP tools
 (agents/inventory_agent.py, agents/labor_scheduling_agent.py) and the mock
 forecast they consume.
 """
+
 import sys
 from datetime import date, timedelta
 from pathlib import Path
@@ -13,8 +14,7 @@ from agents.inventory_agent import compute_reorder_needs, compute_usage_anomalie
 from agents.labor_scheduling_agent import compute_demand
 from mock_hsm import db
 
-VENDORS = [{"vendor_id": "v1", "price_list": {"rm_a": 2.0, "rm_b": 1.0}, "lead_time_days": 1,
-            "min_order_value": 0}]
+VENDORS = [{"vendor_id": "v1", "price_list": {"rm_a": 2.0, "rm_b": 1.0}, "lead_time_days": 1, "min_order_value": 0}]
 
 
 def test_usage_with_nothing_expected_is_flagged():
@@ -32,9 +32,11 @@ def test_usage_within_threshold_not_flagged():
 def test_material_below_reorder_point_with_no_forecast_use_is_reordered():
     forecast = [{"items": {"mi_x": 1}}]
     recipes = {"mi_x": [{"raw_material_id": "rm_a", "qty": 1}]}
-    on_hand = {"on_hand": {"rm_a": 100, "rm_b": 2},
-               "par_levels": {"rm_a": 100, "rm_b": 20},
-               "reorder_points": {"rm_a": 10, "rm_b": 5}}
+    on_hand = {
+        "on_hand": {"rm_a": 100, "rm_b": 2},
+        "par_levels": {"rm_a": 100, "rm_b": 20},
+        "reorder_points": {"rm_a": 10, "rm_b": 5},
+    }
     needs = compute_reorder_needs("site_x", forecast, on_hand, recipes, VENDORS)
     assert [(n["raw_material_id"], n["suggested_order_qty"]) for n in needs] == [("rm_b", 18)]
 

@@ -87,14 +87,17 @@ import os
 
 mcp = FastMCP("hsm")
 
+
 def _client():
-    user_id = os.environ["HSM_ACTIVE_USER"]     # set per slash-command invocation
+    user_id = os.environ["HSM_ACTIVE_USER"]  # set per slash-command invocation
     return HsmClient(mint_token(user_id))
+
 
 @mcp.tool()
 def get_forecast(site_id: str, start_offset_days: int = 0, days: int = 7) -> list:
     """AI/ML sales forecast for a site (normally BigQuery-backed)."""
     return _client().get_forecast(site_id, start_offset_days, days)
+
 
 @mcp.tool()
 def compute_labor_demand(site_id: str, start_offset_days: int = 7, days: int = 7) -> list:
@@ -103,17 +106,21 @@ def compute_labor_demand(site_id: str, start_offset_days: int = 7, days: int = 7
     approximate."""
     from agents.labor_scheduling_agent import compute_demand
     from datetime import date, timedelta
+
     forecast = _client().get_forecast(site_id, start_offset_days, days)
     dates = [date.today() + timedelta(days=start_offset_days + i) for i in range(days)]
     return compute_demand(forecast, dates)
+
 
 @mcp.tool()
 def get_employees(site_id: str) -> list:
     return _client().get_employees(site_id)
 
+
 @mcp.tool()
 def get_labor_rules(jurisdiction: str) -> dict:
     return _client().get_labor_rules(jurisdiction)
+
 
 @mcp.tool()
 def validate_schedule(jurisdiction: str, shifts: list) -> dict:
@@ -121,32 +128,39 @@ def validate_schedule(jurisdiction: str, shifts: list) -> dict:
     the agent must call this rather than assert a schedule is compliant."""
     return _client().validate_schedule(jurisdiction, shifts)
 
+
 @mcp.tool()
 def publish_schedule(site_id: str, shifts: list) -> dict:
     """Writes the schedule. Gated -- see .claude/settings.json permission
     rule and the PreToolUse hook, both of which must pass before this runs."""
     return _client().publish_schedule(site_id, shifts)
 
+
 @mcp.tool()
 def compute_usage_anomalies(site_id: str) -> list:
     from agents.inventory_agent import compute_usage_anomalies as _calc
+
     client = _client()
     usage = client.get_usage(site_id, -7, 7)
     return _calc(site_id, usage, client.get_vendors())
+
 
 @mcp.tool()
 def compute_reorder_needs(site_id: str) -> list:
     from agents.inventory_agent import compute_reorder_needs as _calc
     from mock_hsm.db import RECIPES
+
     client = _client()
     forecast = client.get_forecast(site_id, 0, 7)
     on_hand = client.get_on_hand(site_id)
     return _calc(site_id, forecast, on_hand, RECIPES, client.get_vendors())
 
+
 @mcp.tool()
 def submit_purchase_order(vendor_id: str, line_items: list, site_id: str = None, region_id: str = None) -> dict:
     """Gated the same way as publish_schedule."""
     return _client().submit_purchase_order(vendor_id, line_items, site_id, region_id)
+
 
 if __name__ == "__main__":
     mcp.run()
@@ -328,8 +342,9 @@ jurisdiction = os.environ.get("HSM_JURISDICTION", "GA")
 client = HsmClient(mint_token(os.environ["HSM_ACTIVE_USER"]))
 result = client.validate_schedule(jurisdiction, shifts)
 if result["violations"]:
-    print(json.dumps({"decision": "block",
-                       "reason": f"{len(result['violations'])} unresolved labor-rule violation(s)"}))
+    print(
+        json.dumps({"decision": "block", "reason": f"{len(result['violations'])} unresolved labor-rule violation(s)"})
+    )
     sys.exit(0)
 print(json.dumps({"decision": "approve"}))
 ```

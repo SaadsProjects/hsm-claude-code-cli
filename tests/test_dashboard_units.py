@@ -8,6 +8,7 @@ Streamlit's session state.
 tests/conftest.py gives every test its own audit file and resets the
 backend's write state afterwards.
 """
+
 import ast
 import sys
 from datetime import datetime, timedelta, timezone
@@ -24,9 +25,17 @@ from mock_hsm import db, writes
 
 # ================================================================ KindForms
 
-_INPUT_FOR = {"id": kind_forms.TEXT, "text": kind_forms.TEXT, "ref": kind_forms.REF, "number": kind_forms.NUMBER,
-              "integer": kind_forms.WHOLE, "gl_code": kind_forms.GL_CODE, "days": kind_forms.DAYS_INPUT,
-              "lines": kind_forms.LINES, "price_list": kind_forms.PRICE_LIST}
+_INPUT_FOR = {
+    "id": kind_forms.TEXT,
+    "text": kind_forms.TEXT,
+    "ref": kind_forms.REF,
+    "number": kind_forms.NUMBER,
+    "integer": kind_forms.WHOLE,
+    "gl_code": kind_forms.GL_CODE,
+    "days": kind_forms.DAYS_INPUT,
+    "lines": kind_forms.LINES,
+    "price_list": kind_forms.PRICE_LIST,
+}
 
 
 def test_kind_forms_match_the_backend_catalog():
@@ -54,38 +63,110 @@ def test_data_sets_group_all_eleven_kinds():
     }
 
 
-@pytest.mark.parametrize(("kind", "values", "expected"), [
-    ("menu_item", {"menu_item_id": "mi_x", "name": "X", "gl_code": "GL-FOOD"},
-     {"menu_item_id": "mi_x", "name": "X", "gl_code": "GL-FOOD"}),
-    ("recipe", {"menu_item_id": "mi_x", "lines": [
-        {"raw_material_id": "rm_a", "qty": 1.5, "uom": "u"}, {"raw_material_id": None, "qty": None, "uom": None},
-        {"raw_material_id": "rm_b", "qty": None, "uom": None}]},
-     {"menu_item_id": "mi_x", "lines": [{"raw_material_id": "rm_a", "qty": 1.5, "uom": "u"},
-                                        {"raw_material_id": "rm_b", "qty": None, "uom": None}]}),
-    ("raw_material", {"raw_material_id": "rm_a", "name": "A", "uom": "u"},
-     {"raw_material_id": "rm_a", "name": "A", "uom": "u"}),
-    ("uom", {"uom_id": "u", "name": "unit", "base": "u", "factor_to_base": 1.0},
-     {"uom_id": "u", "name": "unit", "base": "u", "factor_to_base": 1.0}),
-    ("vendor", {"vendor_id": "v", "name": "V", "lead_time_days": 2, "min_order_value": 50.0, "price_list": [
-        {"raw_material_id": "rm_a", "price": 3.0}, {"raw_material_id": None, "price": None},
-        {"raw_material_id": None, "price": 4.0}]},
-     {"vendor_id": "v", "name": "V", "lead_time_days": 2, "price_list": {"rm_a": 3.0, "": 4.0},
-      "min_order_value": 50.0}),
-    ("employee", {"name": "E", "job_code": "jc", "hourly_rate": 15.0, "max_weekly_hours_preference": 30,
-                  "available_days": ("Mon", "Tue"), "employee_id": "ignored"},
-     {"name": "E", "job_code": "jc", "hourly_rate": 15.0, "max_weekly_hours_preference": 30,
-      "available_days": ["Mon", "Tue"]}),
-    ("job_code", {"job_code": "jc", "title": "T"}, {"job_code": "jc", "title": "T"}),
-    ("on_hand", {"raw_material_id": "rm_a", "qty": 4.0}, {"raw_material_id": "rm_a", "qty": 4.0}),
-    ("par_level", {"raw_material_id": "rm_a", "qty": 4.0}, {"raw_material_id": "rm_a", "qty": 4.0}),
-    ("reorder_point", {"raw_material_id": "rm_a", "qty": None}, {"raw_material_id": "rm_a", "qty": None}),
-    ("labor_rule", {"jurisdiction": "XX", "weekly_ot_threshold_hours": 40.0, "daily_ot_threshold_hours": 8.0,
-                    "ot_multiplier": 1.5, "max_consecutive_days": 6, "min_rest_hours_between_shifts": 8.0,
-                    "max_shift_length_hours": 12.0, "note": "n"},
-     {"jurisdiction": "XX", "weekly_ot_threshold_hours": 40.0, "daily_ot_threshold_hours": 8.0,
-      "ot_multiplier": 1.5, "max_consecutive_days": 6, "min_rest_hours_between_shifts": 8.0,
-      "max_shift_length_hours": 12.0, "note": "n"}),
-])
+@pytest.mark.parametrize(
+    ("kind", "values", "expected"),
+    [
+        (
+            "menu_item",
+            {"menu_item_id": "mi_x", "name": "X", "gl_code": "GL-FOOD"},
+            {"menu_item_id": "mi_x", "name": "X", "gl_code": "GL-FOOD"},
+        ),
+        (
+            "recipe",
+            {
+                "menu_item_id": "mi_x",
+                "lines": [
+                    {"raw_material_id": "rm_a", "qty": 1.5, "uom": "u"},
+                    {"raw_material_id": None, "qty": None, "uom": None},
+                    {"raw_material_id": "rm_b", "qty": None, "uom": None},
+                ],
+            },
+            {
+                "menu_item_id": "mi_x",
+                "lines": [
+                    {"raw_material_id": "rm_a", "qty": 1.5, "uom": "u"},
+                    {"raw_material_id": "rm_b", "qty": None, "uom": None},
+                ],
+            },
+        ),
+        (
+            "raw_material",
+            {"raw_material_id": "rm_a", "name": "A", "uom": "u"},
+            {"raw_material_id": "rm_a", "name": "A", "uom": "u"},
+        ),
+        (
+            "uom",
+            {"uom_id": "u", "name": "unit", "base": "u", "factor_to_base": 1.0},
+            {"uom_id": "u", "name": "unit", "base": "u", "factor_to_base": 1.0},
+        ),
+        (
+            "vendor",
+            {
+                "vendor_id": "v",
+                "name": "V",
+                "lead_time_days": 2,
+                "min_order_value": 50.0,
+                "price_list": [
+                    {"raw_material_id": "rm_a", "price": 3.0},
+                    {"raw_material_id": None, "price": None},
+                    {"raw_material_id": None, "price": 4.0},
+                ],
+            },
+            {
+                "vendor_id": "v",
+                "name": "V",
+                "lead_time_days": 2,
+                "price_list": {"rm_a": 3.0, "": 4.0},
+                "min_order_value": 50.0,
+            },
+        ),
+        (
+            "employee",
+            {
+                "name": "E",
+                "job_code": "jc",
+                "hourly_rate": 15.0,
+                "max_weekly_hours_preference": 30,
+                "available_days": ("Mon", "Tue"),
+                "employee_id": "ignored",
+            },
+            {
+                "name": "E",
+                "job_code": "jc",
+                "hourly_rate": 15.0,
+                "max_weekly_hours_preference": 30,
+                "available_days": ["Mon", "Tue"],
+            },
+        ),
+        ("job_code", {"job_code": "jc", "title": "T"}, {"job_code": "jc", "title": "T"}),
+        ("on_hand", {"raw_material_id": "rm_a", "qty": 4.0}, {"raw_material_id": "rm_a", "qty": 4.0}),
+        ("par_level", {"raw_material_id": "rm_a", "qty": 4.0}, {"raw_material_id": "rm_a", "qty": 4.0}),
+        ("reorder_point", {"raw_material_id": "rm_a", "qty": None}, {"raw_material_id": "rm_a", "qty": None}),
+        (
+            "labor_rule",
+            {
+                "jurisdiction": "XX",
+                "weekly_ot_threshold_hours": 40.0,
+                "daily_ot_threshold_hours": 8.0,
+                "ot_multiplier": 1.5,
+                "max_consecutive_days": 6,
+                "min_rest_hours_between_shifts": 8.0,
+                "max_shift_length_hours": 12.0,
+                "note": "n",
+            },
+            {
+                "jurisdiction": "XX",
+                "weekly_ot_threshold_hours": 40.0,
+                "daily_ot_threshold_hours": 8.0,
+                "ot_multiplier": 1.5,
+                "max_consecutive_days": 6,
+                "min_rest_hours_between_shifts": 8.0,
+                "max_shift_length_hours": 12.0,
+                "note": "n",
+            },
+        ),
+    ],
+)
 def test_build_record_per_kind(kind, values, expected):
     assert kind_forms.build_record(kind, values) == expected
 
@@ -116,8 +197,9 @@ def test_stored_price_list_becomes_slots():
         kind_forms.stored_slots("vendor", form.field("name"), {})
 
 
-@pytest.mark.parametrize(("user_id", "expected"), [
-    ("user_rm_midtown", False), ("user_regional_atl", True), ("user_dev_tester", True)])
+@pytest.mark.parametrize(
+    ("user_id", "expected"), [("user_rm_midtown", False), ("user_regional_atl", True), ("user_dev_tester", True)]
+)
 def test_region_wide_detection_for_every_persona(user_id, expected):
     assert kind_forms.is_region_wide(db.USERS[user_id]) is expected
 
@@ -140,8 +222,9 @@ def test_field_key_is_distinct_across_mode_record_version_and_site():
         kind_forms.field_key("edit", "vendor", None, "a", 1, 'b","name'),
     }
     assert len(keys) == 8
-    assert kind_forms.field_key("add", "vendor", "", "", "", "x") == kind_forms.field_key("add", "vendor", None,
-                                                                                          None, None, "x")
+    assert kind_forms.field_key("add", "vendor", "", "", "", "x") == kind_forms.field_key(
+        "add", "vendor", None, None, None, "x"
+    )
 
 
 def test_referenced_kinds_and_blank_detection():
@@ -156,6 +239,7 @@ def test_referenced_kinds_and_blank_detection():
 
 
 # ================================================================= SafeText
+
 
 def test_escape_md_escapes_markdown_html_entities_colour_and_math():
     raw = "**b** <b>x</b> [l](u) :red[x] $m$ &lt; # h"
@@ -217,15 +301,18 @@ def test_csv_bom_accepted_and_header_trimmed():
     assert result.refusal is None and len(result.rows) == 1
 
 
-@pytest.mark.parametrize(("data", "message"), [
-    (b"", csv_rows.EMPTY),
-    (b"\r\n\n", csv_rows.EMPTY),
-    (b"vendor_id,name,price_list\n\xff\xfe,x,y\n", csv_rows.NOT_UTF8),
-    (b"vendor_id,name\nv1,a\n", "The header must be: vendor_id,name,price_list."),
-    (b"Vendor_id,name,price_list\nv1,a,x\n", "The header must be: vendor_id,name,price_list."),
-    (b"name,vendor_id,price_list\nv1,a,x\n", "The header must be: vendor_id,name,price_list."),
-    (b'vendor_id,name,price_list\nv1,"open,x\n', "The file could not be read as CSV: unexpected end of data."),
-])
+@pytest.mark.parametrize(
+    ("data", "message"),
+    [
+        (b"", csv_rows.EMPTY),
+        (b"\r\n\n", csv_rows.EMPTY),
+        (b"vendor_id,name,price_list\n\xff\xfe,x,y\n", csv_rows.NOT_UTF8),
+        (b"vendor_id,name\nv1,a\n", "The header must be: vendor_id,name,price_list."),
+        (b"Vendor_id,name,price_list\nv1,a,x\n", "The header must be: vendor_id,name,price_list."),
+        (b"name,vendor_id,price_list\nv1,a,x\n", "The header must be: vendor_id,name,price_list."),
+        (b'vendor_id,name,price_list\nv1,"open,x\n', "The file could not be read as CSV: unexpected end of data."),
+    ],
+)
 def test_csv_local_refusals(data, message):
     result = csv_rows.read_upload(data, COLUMNS)
     assert result == (None, message)
@@ -249,17 +336,18 @@ def _rows_of_size(target, cell_char="a"):
     """Rows whose encoded bulk body is exactly ``target`` bytes (one big name cell, padded)."""
     rows = [{"row": 1, "record": {"vendor_id": "v", "name": "", "price_list": "x"}}]
     base = csv_rows.encoded_bulk_size(rows, "f.csv")
-    per_char = csv_rows.encoded_bulk_size([{"row": 1, "record": {**rows[0]["record"], "name": cell_char}}],
-                                          "f.csv") - base
+    per_char = (
+        csv_rows.encoded_bulk_size([{"row": 1, "record": {**rows[0]["record"], "name": cell_char}}], "f.csv") - base
+    )
     count, rest = divmod(target - base, per_char)
     rows[0]["record"]["name"] = cell_char * count + "a" * rest
     return rows
 
 
 def test_encoded_size_just_under_and_just_over_the_limit():
-    under = _rows_of_size(csv_rows.MAX_BULK_BYTES - 1024)       # 959 KiB
+    under = _rows_of_size(csv_rows.MAX_BULK_BYTES - 1024)  # 959 KiB
     exact = _rows_of_size(csv_rows.MAX_BULK_BYTES)
-    over = _rows_of_size(csv_rows.MAX_BULK_BYTES + 1024)        # 961 KiB
+    over = _rows_of_size(csv_rows.MAX_BULK_BYTES + 1024)  # 961 KiB
     assert csv_rows.encoded_bulk_size(under, "f.csv") == csv_rows.MAX_BULK_BYTES - 1024
     assert csv_rows.fits(under, "f.csv") and csv_rows.fits(exact, "f.csv")
     assert csv_rows.encoded_bulk_size(over, "f.csv") == csv_rows.MAX_BULK_BYTES + 1024
@@ -326,22 +414,54 @@ class FakeClient:
         return self._run("session_status", {"active": True, "ended_reason": None}, session_id)
 
     def add_record(self, kind, record, session_id, site_id=None, request_id=None):
-        return self._run("add_record", {"record": record, "meta": {}}, kind, record, session_id,
-                         site_id=site_id, request_id=request_id)
+        return self._run(
+            "add_record",
+            {"record": record, "meta": {}},
+            kind,
+            record,
+            session_id,
+            site_id=site_id,
+            request_id=request_id,
+        )
 
     def update_record(self, kind, record_id, record, version, session_id, site_id=None, request_id=None):
-        return self._run("update_record", {"record": record, "meta": {}}, kind, record_id, record, version,
-                         session_id, site_id=site_id, request_id=request_id)
+        return self._run(
+            "update_record",
+            {"record": record, "meta": {}},
+            kind,
+            record_id,
+            record,
+            version,
+            session_id,
+            site_id=site_id,
+            request_id=request_id,
+        )
 
     def delete_record(self, kind, record_id, version, session_id, site_id=None, request_id=None):
-        return self._run("delete_record", {"deleted": True}, kind, record_id, version, session_id,
-                         site_id=site_id, request_id=request_id)
+        return self._run(
+            "delete_record",
+            {"deleted": True},
+            kind,
+            record_id,
+            version,
+            session_id,
+            site_id=site_id,
+            request_id=request_id,
+        )
 
     def bulk_add(self, kind, rows, file_name, session_id, site_id=None, request_id=None):
         key = kind_forms.KIND_FORMS[kind].key
         records = [{"record": {key: row["record"].get(key, f"gen{row['row']}")}} for row in rows]
-        return self._run("bulk_add", {"added": len(rows), "records": records}, kind, rows, file_name,
-                         session_id, site_id=site_id, request_id=request_id)
+        return self._run(
+            "bulk_add",
+            {"added": len(rows), "records": records},
+            kind,
+            rows,
+            file_name,
+            session_id,
+            site_id=site_id,
+            request_id=request_id,
+        )
 
     def retry_write(self, error):
         return self._run("retry_write", {"record": {"job_code": "jc1"}, "meta": {}}, error)
@@ -369,8 +489,7 @@ def fake(monkeypatch):
 def cleared(monkeypatch):
     """Counts cache clears instead of touching Streamlit's cache."""
     counter = {"n": 0}
-    monkeypatch.setattr(actions, "clear_cached_reads",
-                        lambda state=None: counter.__setitem__("n", counter["n"] + 1))
+    monkeypatch.setattr(actions, "clear_cached_reads", lambda state=None: counter.__setitem__("n", counter["n"] + 1))
     return counter
 
 
@@ -384,8 +503,9 @@ def state(fake, cleared):
 
 
 def _unknown(deadline=NOW + timedelta(minutes=14)):
-    return HsmUnavailable("no answer from HSM: TimeoutError", outcome_unknown=True, request_id="r-held",
-                          retry_deadline=deadline)
+    return HsmUnavailable(
+        "no answer from HSM: TimeoutError", outcome_unknown=True, request_id="r-held", retry_deadline=deadline
+    )
 
 
 def _fill_job_code_add(state, job_code="jc1", title="Cook"):
@@ -402,6 +522,7 @@ def _sent_ids(fake, name):
 
 
 # ------------------------------------------------------------ exception table
+
 
 def test_session_expired_logs_out_with_the_session_ended_notice(state, fake):
     fake.script["add_record"] = SessionExpired()
@@ -442,7 +563,11 @@ def test_refusal_shows_message_and_problems_and_refreshes(state, fake, cleared):
     actions.submit_add("job_code", None, state=state)
     notice = session.notice(state)
     assert (notice["level"], notice["message"], notice["problems"], notice["stale"]) == (
-        "error", "invalid record", problems, False)
+        "error",
+        "invalid record",
+        problems,
+        False,
+    )
     assert cleared["n"] == 1 and session.audit(state) == {}
 
 
@@ -456,10 +581,18 @@ def test_stale_record_refusal_offers_reload(state, fake, cleared):
 
 
 def test_value_error_from_retry_write_is_the_expired_retry(state, fake, cleared):
-    session.set_item("pending_retry", {"control": ("add", "job_code", None), "kind": "job_code", "site": None,
-                                       "action": "add", "error": _unknown()}, state)
-    session.request_ids(state)[("add", "job_code", None)] = {"id": "r-held", "fingerprint": "f", "last": "unknown",
-                                                             "kind": "job_code", "site": None}
+    session.set_item(
+        "pending_retry",
+        {"control": ("add", "job_code", None), "kind": "job_code", "site": None, "action": "add", "error": _unknown()},
+        state,
+    )
+    session.request_ids(state)[("add", "job_code", None)] = {
+        "id": "r-held",
+        "fingerprint": "f",
+        "last": "unknown",
+        "kind": "job_code",
+        "site": None,
+    }
     fake.script["retry_write"] = ValueError("retry not allowed")
     actions.try_again(state=state)
     assert session.pending_retry(state) is None
@@ -477,12 +610,13 @@ def test_unexpected_error_keeps_the_login_and_never_escapes(state, fake):
 
 # ---------------------------------------------------------- request-id rule
 
+
 def test_same_id_reused_only_for_an_identical_body_after_a_success(state, fake):
     _fill_job_code_edit(state, "Chef")
     actions.submit_edit("job_code", None, "jc1", 1, state=state)
-    actions.submit_edit("job_code", None, "jc1", 1, state=state)        # double click: identical body
+    actions.submit_edit("job_code", None, "jc1", 1, state=state)  # double click: identical body
     _fill_job_code_edit(state, "Head chef")
-    actions.submit_edit("job_code", None, "jc1", 1, state=state)        # changed body
+    actions.submit_edit("job_code", None, "jc1", 1, state=state)  # changed body
     first, repeat, changed = _sent_ids(fake, "update_record")
     assert first == repeat and changed != first
 
@@ -504,7 +638,7 @@ def test_new_id_after_discard_and_after_expiry(state, fake, monkeypatch):
     assert session.notice(state)["message"] == actions.DISCARDED
     actions.submit_edit("job_code", None, "jc1", 1, state=state)
     _fill_job_code_edit(state, "Chef", version=2)
-    actions.submit_edit("job_code", None, "jc1", 2, state=state)       # no answer again, then expires
+    actions.submit_edit("job_code", None, "jc1", 2, state=state)  # no answer again, then expires
     monkeypatch.setattr(actions, "_now", lambda: NOW + timedelta(minutes=15))
     assert actions.retry_expired(state) is True
     assert session.pending_retry(state) is None
@@ -518,7 +652,7 @@ def test_new_id_after_the_session_ended(state, fake):
     actions.submit_edit("job_code", None, "jc1", 1, state=state)
     fake.script["session_status"] = lambda sid: {"active": False, "ended_reason": "idle"}
     actions.check_session(state)
-    session.set_login(dict(LOGIN), state)                               # logged in again
+    session.set_login(dict(LOGIN), state)  # logged in again
     _fill_job_code_edit(state, "Chef")
     actions.submit_edit("job_code", None, "jc1", 1, state=state)
     first, second = _sent_ids(fake, "update_record")
@@ -531,9 +665,9 @@ def test_stale_success_dropped_after_another_success_on_the_same_kind_and_site(s
     edit_control = ("edit", "job_code", None, "jc1", 1)
     assert session.request_ids(state)[edit_control]["last"] == "ok"
     _fill_job_code_add(state, "jc2", "Host")
-    actions.submit_add("job_code", None, state=state)                   # another success, same kind and site
+    actions.submit_add("job_code", None, state=state)  # another success, same kind and site
     assert edit_control not in session.request_ids(state)
-    actions.submit_edit("job_code", None, "jc1", 1, state=state)        # identical body, checked afresh
+    actions.submit_edit("job_code", None, "jc1", 1, state=state)  # identical body, checked afresh
     first, again = _sent_ids(fake, "update_record")
     assert first != again
 
@@ -542,7 +676,7 @@ def test_double_submit_of_a_cleared_add_form_sends_once(state, fake):
     _fill_job_code_add(state)
     actions.submit_add("job_code", None, state=state)
     assert not any(k.startswith(kind_forms.form_key_prefix("add", "job_code", None, None, None)) for k in state)
-    actions.submit_add("job_code", None, state=state)                   # second callback reads an empty form
+    actions.submit_add("job_code", None, state=state)  # second callback reads an empty form
     assert fake.names().count("add_record") == 1
 
 
@@ -553,19 +687,23 @@ def test_a_stale_double_click_that_brings_old_values_back_sends_nothing(state, f
     # those values land on keys no longer drawn and the form reads as blank.
     _fill_job_code_add(state)
     actions.submit_add("job_code", None, state=state)
-    _fill_job_code_add(state)                                           # the browser's stale values
+    _fill_job_code_add(state)  # the browser's stale values
     version = session.add_form_version("job_code", None, state)
     assert version is not None
-    actions.submit_add("job_code", None, None, version, state=state)    # what the redrawn form submits
+    actions.submit_add("job_code", None, None, version, state=state)  # what the redrawn form submits
     assert fake.names().count("add_record") == 1
 
 
 # ------------------------------------------------------- logout and retries
 
+
 def test_logout_with_a_held_write_logs_out_at_once_and_says_it_was_dropped(state, fake, cleared):
     # NFR2.4 as amended (NFR-design Q1: B): no prompt; one click ends the login.
-    session.set_item("pending_retry", {"control": ("add", "job_code", None), "kind": "job_code", "site": None,
-                                       "action": "add", "error": _unknown()}, state)
+    session.set_item(
+        "pending_retry",
+        {"control": ("add", "job_code", None), "kind": "job_code", "site": None, "action": "add", "error": _unknown()},
+        state,
+    )
     actions.log_out(state=state)
     assert session.login(state) is None and session.pending_retry(state) is None
     assert fake.names() == ["end_session"] and cleared["n"] == 1
@@ -586,7 +724,7 @@ def test_new_id_after_logout_with_a_held_write(state, fake):
     _fill_job_code_edit(state, "Chef")
     actions.submit_edit("job_code", None, "jc1", 1, state=state)
     actions.log_out(state=state)
-    session.set_login(dict(LOGIN), state)                               # logged in again
+    session.set_login(dict(LOGIN), state)  # logged in again
     _fill_job_code_edit(state, "Chef")
     actions.submit_edit("job_code", None, "jc1", 1, state=state)
     first, second = _sent_ids(fake, "update_record")
@@ -604,8 +742,11 @@ def test_logout_always_ends_the_login(state, fake, failure):
 
 
 def test_try_again_that_lands_records_the_add(state, fake):
-    session.set_item("pending_retry", {"control": ("add", "job_code", None), "kind": "job_code", "site": None,
-                                       "action": "add", "error": _unknown()}, state)
+    session.set_item(
+        "pending_retry",
+        {"control": ("add", "job_code", None), "kind": "job_code", "site": None, "action": "add", "error": _unknown()},
+        state,
+    )
     actions.try_again(state=state)
     assert session.added(state) == {"job_code": ["jc1"]}
     assert session.notice(state)["message"] == "Added job code jc1."
@@ -613,8 +754,11 @@ def test_try_again_that_lands_records_the_add(state, fake):
 
 def test_try_again_passes_the_held_error_object_itself(state, fake):
     held_error = _unknown()
-    session.set_item("pending_retry", {"control": ("add", "job_code", None), "kind": "job_code", "site": None,
-                                       "action": "add", "error": held_error}, state)
+    session.set_item(
+        "pending_retry",
+        {"control": ("add", "job_code", None), "kind": "job_code", "site": None, "action": "add", "error": held_error},
+        state,
+    )
     actions.try_again(state=state)
     ((_, args, _),) = [call for call in fake.calls if call[0] == "retry_write"]
     assert args[0] is held_error  # never a copy (NFR2.2)
@@ -624,8 +768,11 @@ def test_try_again_passes_the_held_error_object_itself(state, fake):
 def test_try_again_without_an_answer_keeps_offering_it(state, fake):
     again = _unknown()
     fake.script["retry_write"] = again
-    session.set_item("pending_retry", {"control": ("add", "job_code", None), "kind": "job_code", "site": None,
-                                       "action": "add", "error": _unknown()}, state)
+    session.set_item(
+        "pending_retry",
+        {"control": ("add", "job_code", None), "kind": "job_code", "site": None, "action": "add", "error": _unknown()},
+        state,
+    )
     actions.try_again(state=state)
     assert session.pending_retry(state)["error"] is again
 
@@ -641,9 +788,14 @@ def test_session_ended_with_a_held_write_says_it_was_dropped(state, fake):
 ENDED_IDLE = actions.ENDED_REASONS["idle"]
 
 
-@pytest.mark.parametrize(("reason", "message"), [
-    ("idle", actions.ENDED_REASONS["idle"]), ("logout", actions.ENDED_REASONS["logout"]),
-    (None, actions.ENDED_GENERIC)])
+@pytest.mark.parametrize(
+    ("reason", "message"),
+    [
+        ("idle", actions.ENDED_REASONS["idle"]),
+        ("logout", actions.ENDED_REASONS["logout"]),
+        (None, actions.ENDED_GENERIC),
+    ],
+)
 def test_session_check_reasons_without_a_held_write(state, fake, reason, message):
     fake.script["session_status"] = lambda sid: {"active": False, "ended_reason": reason}
     actions.check_session(state)
@@ -657,6 +809,7 @@ def test_session_check_without_an_answer_keeps_the_login(state, fake):
 
 
 # ------------------------------------------------------------ added updates
+
 
 def test_added_updates_after_add_upload_and_delete(state, fake):
     _fill_job_code_add(state, "jc1", "Cook")
@@ -684,8 +837,9 @@ def test_upload_refused_locally_sends_nothing(state, fake):
     state["up"] = Upload("codes.csv", b"code,title\njc2,Host\n")
     actions.upload("job_code", None, "up", state=state)
     assert session.notice(state)["message"] == "The header must be: job_code,title."
-    state["up"] = Upload("big.csv", b"job_code,title\n" + ("jc,é" * 1).encode() + b"\n"
-                         + ("jc9," + "é" * 200_000 + "\n").encode())
+    state["up"] = Upload(
+        "big.csv", b"job_code,title\n" + ("jc,é" * 1).encode() + b"\n" + ("jc9," + "é" * 200_000 + "\n").encode()
+    )
     actions.upload("job_code", None, "up", state=state)
     assert session.notice(state)["message"] == csv_rows.TOO_LARGE
     assert "bulk_add" not in fake.names()
@@ -704,11 +858,15 @@ def test_refused_upload_lists_problems_and_says_nothing_was_saved(state, fake):
 
 # --------------------------------------------------------- login and audit
 
+
 def test_log_in_starts_one_session_and_clears_scoped_state(fake, cleared):
     state = {"added": {"x": ["y"]}, "notice": {"message": "old"}}
     actions.log_in("user_dev_tester", state=state)
-    assert session.login(state) == {"session_id": "sid-new", "user_id": "user_dev_tester",
-                                    "persona": "REGIONAL_MANAGER"}
+    assert session.login(state) == {
+        "session_id": "sid-new",
+        "user_id": "user_dev_tester",
+        "persona": "REGIONAL_MANAGER",
+    }
     assert session.added(state) == {} and session.notice(state) is None and fake.names() == ["start_session"]
 
 
@@ -720,21 +878,25 @@ def test_failed_log_in_stays_logged_out(fake, cleared):
 
 
 def test_audit_paging_load_older_appends_from_the_last_entry(state, fake):
-    fake.script["audit_page"] = [{"entries": [{"id": "e3", "session_id": "sid-x"}], "next_before": "e3", "total": 3},
-                                 {"entries": [{"id": "e2"}], "next_before": None, "total": 3}]
+    fake.script["audit_page"] = [
+        {"entries": [{"id": "e3", "session_id": "sid-x"}], "next_before": "e3", "total": 3},
+        {"entries": [{"id": "e2"}], "next_before": None, "total": 3},
+    ]
     assert actions.load_audit(state) is None
     actions.audit_load_older(state=state)
     assert [e["id"] for e in session.audit(state)["entries"]] == ["e3", "e2"]
     assert all("session_id" not in e for e in session.audit(state)["entries"])
     assert session.audit(state)["next_before"] is None
-    actions.audit_load_older(state=state)                   # no older page: no call
+    actions.audit_load_older(state=state)  # no older page: no call
     assert [kwargs["before"] for name, _, kwargs in fake.calls] == [None, "e3"]
 
 
 def test_refused_load_older_keeps_the_loaded_entries(state, fake):
     # U2 BR4.3: no purge branch; any refusal is an ordinary notice.
-    fake.script["audit_page"] = [{"entries": [{"id": "e3"}], "next_before": "e3", "total": 3},
-                                 HsmApiError(400, "invalid before")]
+    fake.script["audit_page"] = [
+        {"entries": [{"id": "e3"}], "next_before": "e3", "total": 3},
+        HsmApiError(400, "invalid before"),
+    ]
     actions.load_audit(state)
     actions.audit_load_older(state=state)
     assert [e["id"] for e in session.audit(state)["entries"]] == ["e3"]
@@ -748,12 +910,14 @@ def test_audit_unavailable_message(state, fake):
 
 # ================================================= inline actions and rerun
 
+
 class _Signal(BaseException):
     """Stands in for Streamlit's rerun signal, a BaseException."""
 
 
 def test_rerun_signal_is_a_base_exception_the_guard_never_catches(state):
     from streamlit.runtime.scriptrunner_utils.exceptions import RerunException
+
     assert not issubclass(RerunException, Exception)
 
     @actions.guarded
@@ -780,12 +944,14 @@ def test_then_rerun_reruns_after_the_guarded_action_even_when_it_failed(state, f
 def test_then_rerun_passes_the_rerun_signal_through(monkeypatch):
     def rerun():
         raise _Signal()
+
     monkeypatch.setattr(actions.st, "rerun", rerun)
     with pytest.raises(_Signal):
         actions.then_rerun(lambda: None)
 
 
 # ======================================== per-session Manage data cache (Q3)
+
 
 def _listing(n):
     return {"records": [{"job_code": f"jc{n}"}], "meta": {}}
@@ -839,9 +1005,11 @@ _real_clear = actions.clear_cached_reads  # captured before the ``cleared`` fixt
 def test_write_outcomes_refresh_and_logout_clear_the_session_cache(state, fake, monkeypatch):
     monkeypatch.setattr(actions.st.cache_data, "clear", lambda: None)
     monkeypatch.setattr(actions, "clear_cached_reads", _real_clear)
-    for clear in (lambda: (_fill_job_code_add(state), actions.submit_add("job_code", None, state=state)),
-                  lambda: actions.clear_cached_reads(state),                          # Refresh data
-                  lambda: actions.log_out(state=state)):
+    for clear in (
+        lambda: (_fill_job_code_add(state), actions.submit_add("job_code", None, state=state)),
+        lambda: actions.clear_cached_reads(state),  # Refresh data
+        lambda: actions.log_out(state=state),
+    ):
         session.set_login(dict(LOGIN), state)
         session.records(state)[("u", "job_code", None)] = {"fetched": NOW, "listing": _listing(0)}
         clear()
@@ -871,8 +1039,9 @@ def _new_code():
 
 
 def _is_escape(node):
-    return (isinstance(node, ast.Call)
-            and (getattr(node.func, "id", None) == "escape_md" or getattr(node.func, "attr", None) == "escape_md"))
+    return isinstance(node, ast.Call) and (
+        getattr(node.func, "id", None) == "escape_md" or getattr(node.func, "attr", None) == "escape_md"
+    )
 
 
 def _safe_text(node, where):
@@ -883,8 +1052,10 @@ def _safe_text(node, where):
     if _is_escape(node):
         return True
     if isinstance(node, ast.JoinedStr):
-        return all(isinstance(part, ast.Constant) or (isinstance(part, ast.FormattedValue) and _is_escape(part.value))
-                   for part in node.values)
+        return all(
+            isinstance(part, ast.Constant) or (isinstance(part, ast.FormattedValue) and _is_escape(part.value))
+            for part in node.values
+        )
     return False
 
 
@@ -908,6 +1079,7 @@ def test_dashboard_listens_on_this_machine_by_default():
     # 127.0.0.1, and the README says how to open it up on purpose. NFR1.6:
     # Streamlit itself refuses uploads over 2 MB.
     import tomllib
+
     config = tomllib.loads((DASHBOARD.parent / ".streamlit" / "config.toml").read_text())
     assert config["server"]["address"] == "127.0.0.1" and config["server"]["maxUploadSize"] == 2
     readme = (DASHBOARD / "README.md").read_text()

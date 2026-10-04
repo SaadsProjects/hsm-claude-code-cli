@@ -12,6 +12,7 @@ read-only; Manage data adds, edits, deletes and bulk-uploads reference data,
 and Audit lists the audit trail (unit U4; see dashboard/README.md). The
 dashboard never publishes schedules or submits purchase orders.
 """
+
 import os
 import sys
 import urllib.error
@@ -85,33 +86,52 @@ def load_site_bundle(user_id, site_id, demand_offset):
 @st.cache_data(ttl=CACHE_TTL_SECONDS, show_spinner=False)
 def load_region(user_id, region_id):
     client = _client(user_id)
-    return (data.region_rollup(client, client.get_sites(region_id=region_id)),
-            client.get_purchase_orders(region_id=region_id))
+    return (
+        data.region_rollup(client, client.get_sites(region_id=region_id)),
+        client.get_purchase_orders(region_id=region_id),
+    )
 
 
 # ------------------------------------------------------------------- charts
 def _covers_chart(demand):
-    df = pd.DataFrame([{"date": d["date"], "day": f'{d["weekday"]} {d["date"][5:]}', "covers": d["covers"]}
-                       for d in demand])
-    return alt.Chart(df).mark_bar(color=SERIES[0], cornerRadiusTopLeft=4, cornerRadiusTopRight=4).encode(
-        x=alt.X("day:N", sort=None, title=None, axis=alt.Axis(labelAngle=0)),
-        y=alt.Y("covers:Q", title="Forecast covers"),
-        tooltip=["date", alt.Tooltip("covers:Q", format=",.1f")],
+    df = pd.DataFrame(
+        [{"date": d["date"], "day": f"{d['weekday']} {d['date'][5:]}", "covers": d["covers"]} for d in demand]
+    )
+    return (
+        alt.Chart(df)
+        .mark_bar(color=SERIES[0], cornerRadiusTopLeft=4, cornerRadiusTopRight=4)
+        .encode(
+            x=alt.X("day:N", sort=None, title=None, axis=alt.Axis(labelAngle=0)),
+            y=alt.Y("covers:Q", title="Forecast covers"),
+            tooltip=["date", alt.Tooltip("covers:Q", format=",.1f")],
+        )
     )
 
 
 def _role_hours_chart(demand):
-    rows = [{"day": f'{d["weekday"]} {d["date"][5:]}', "role": ROLE_TITLES[jc], "order": ROLE_ORDER.index(jc),
-             "hours": hours}
-            for d in demand for jc, hours in d["role_hours_needed"].items()]
+    rows = [
+        {
+            "day": f"{d['weekday']} {d['date'][5:]}",
+            "role": ROLE_TITLES[jc],
+            "order": ROLE_ORDER.index(jc),
+            "hours": hours,
+        }
+        for d in demand
+        for jc, hours in d["role_hours_needed"].items()
+    ]
     titles = [ROLE_TITLES[jc] for jc in ROLE_ORDER]
-    return alt.Chart(pd.DataFrame(rows)).mark_bar(stroke="white", strokeWidth=2).encode(
-        x=alt.X("day:N", sort=None, title=None, axis=alt.Axis(labelAngle=0)),
-        y=alt.Y("hours:Q", title="Labor hours needed"),
-        color=alt.Color("role:N", scale=alt.Scale(domain=titles, range=SERIES), title="Role",
-                        legend=alt.Legend(orient="top")),
-        order=alt.Order("order:Q"),
-        tooltip=["day", "role", alt.Tooltip("hours:Q", format=",.1f")],
+    return (
+        alt.Chart(pd.DataFrame(rows))
+        .mark_bar(stroke="white", strokeWidth=2)
+        .encode(
+            x=alt.X("day:N", sort=None, title=None, axis=alt.Axis(labelAngle=0)),
+            y=alt.Y("hours:Q", title="Labor hours needed"),
+            color=alt.Color(
+                "role:N", scale=alt.Scale(domain=titles, range=SERIES), title="Role", legend=alt.Legend(orient="top")
+            ),
+            order=alt.Order("order:Q"),
+            tooltip=["day", "role", alt.Tooltip("hours:Q", format=",.1f")],
+        )
     )
 
 
@@ -122,8 +142,12 @@ def _sales_chart(sales):
     base = alt.Chart(long).encode(
         x=alt.X("day:N", sort=alt.EncodingSortField("date"), title=None, axis=alt.Axis(labelAngle=0)),
         y=alt.Y("units:Q", title="Units sold", scale=alt.Scale(zero=False)),
-        color=alt.Color("series:N", scale=alt.Scale(domain=["Actual", "Forecast"], range=SERIES[:2]),
-                        title=None, legend=alt.Legend(orient="top")),
+        color=alt.Color(
+            "series:N",
+            scale=alt.Scale(domain=["Actual", "Forecast"], range=SERIES[:2]),
+            title=None,
+            legend=alt.Legend(orient="top"),
+        ),
         tooltip=["date", "series", alt.Tooltip("units:Q", format=",.1f")],
     )
     return base.mark_line(strokeWidth=2) + base.mark_point(size=64, filled=True)
@@ -141,21 +165,57 @@ def _on_hand_chart(on_hand, reorder):
     # Most urgent first: lowest projected stock at delivery, then everything that doesn't need a reorder.
     order = df.sort_values(["projected_pct", "pct_of_par"], na_position="last")["name"].tolist()
     y = alt.Y("name:N", sort=order, title=None)
-    bars = alt.Chart(df).mark_bar(cornerRadiusTopRight=4, cornerRadiusBottomRight=4).encode(
-        y=y, x=alt.X("pct_of_par:Q", title="% of par"),
-        color=alt.Color("status:N", scale=alt.Scale(domain=["OK", "Reorder needed"], range=[SERIES[0], CRITICAL]),
-                        title=None, legend=alt.Legend(orient="top")),
-        tooltip=["name", "uom", "on_hand", "reorder_point", "par", alt.Tooltip("pct_of_par:Q", title="On hand, % of par")],
+    bars = (
+        alt.Chart(df)
+        .mark_bar(cornerRadiusTopRight=4, cornerRadiusBottomRight=4)
+        .encode(
+            y=y,
+            x=alt.X("pct_of_par:Q", title="% of par"),
+            color=alt.Color(
+                "status:N",
+                scale=alt.Scale(domain=["OK", "Reorder needed"], range=[SERIES[0], CRITICAL]),
+                title=None,
+                legend=alt.Legend(orient="top"),
+            ),
+            tooltip=[
+                "name",
+                "uom",
+                "on_hand",
+                "reorder_point",
+                "par",
+                alt.Tooltip("pct_of_par:Q", title="On hand, % of par"),
+            ],
+        )
     )
-    rop = alt.Chart(df).mark_tick(color="#52514e", thickness=2, size=18).encode(
-        y=y, x="rop_pct:Q", tooltip=["name", alt.Tooltip("reorder_point:Q", title="Reorder point")],
+    rop = (
+        alt.Chart(df)
+        .mark_tick(color="#52514e", thickness=2, size=18)
+        .encode(
+            y=y,
+            x="rop_pct:Q",
+            tooltip=["name", alt.Tooltip("reorder_point:Q", title="Reorder point")],
+        )
     )
-    proj = alt.Chart(df.dropna(subset=["projected"])).mark_point(
-        shape="diamond", size=90, filled=True, color="#0b0b0b", stroke="white", strokeWidth=1.5,
-    ).encode(
-        y=y, x="projected_pct:Q",
-        tooltip=["name", "uom", alt.Tooltip("projected:Q", title="Projected at delivery"),
-                 alt.Tooltip("projected_pct:Q", title="Projected, % of par")],
+    proj = (
+        alt.Chart(df.dropna(subset=["projected"]))
+        .mark_point(
+            shape="diamond",
+            size=90,
+            filled=True,
+            color="#0b0b0b",
+            stroke="white",
+            strokeWidth=1.5,
+        )
+        .encode(
+            y=y,
+            x="projected_pct:Q",
+            tooltip=[
+                "name",
+                "uom",
+                alt.Tooltip("projected:Q", title="Projected at delivery"),
+                alt.Tooltip("projected_pct:Q", title="Projected, % of par"),
+            ],
+        )
     )
     return bars + rop + proj
 
@@ -168,7 +228,7 @@ def _money(x):
 def overview_tab(bundle, user):
     demand, anomalies, reorder = bundle["demand"], bundle["anomalies"], bundle["reorder"]
     cols = st.columns(4)
-    cols[0].metric("Forecast covers (selected week)", f'{sum(d["covers"] for d in demand):,.0f}')
+    cols[0].metric("Forecast covers (selected week)", f"{sum(d['covers'] for d in demand):,.0f}")
     cols[1].metric("Usage anomalies (past 7 days)", len(anomalies))
     cols[2].metric("Anomaly cost impact", _money(sum(a["cost_impact"] for a in anomalies)))
     cols[3].metric("Items needing reorder", len(reorder))
@@ -177,12 +237,16 @@ def overview_tab(bundle, user):
     st.altair_chart(_sales_chart(bundle["sales"]), width="stretch")
 
     if user["region_id"]:
-        st.subheader(f'Region roll-up: {user["region_id"]}')
+        st.subheader(f"Region roll-up: {user['region_id']}")
         rollup, region_pos = load_region(user["user_id"], user["region_id"])
-        st.dataframe(rollup, hide_index=True, column_config={
-            "anomaly_cost_impact": st.column_config.NumberColumn("Anomaly cost impact", format="$%.2f"),
-            "suggested_order_value": st.column_config.NumberColumn("Suggested order value", format="$%.2f"),
-        })
+        st.dataframe(
+            rollup,
+            hide_index=True,
+            column_config={
+                "anomaly_cost_impact": st.column_config.NumberColumn("Anomaly cost impact", format="$%.2f"),
+                "suggested_order_value": st.column_config.NumberColumn("Suggested order value", format="$%.2f"),
+            },
+        )
         st.subheader("Region-level purchase orders")
         _po_table(region_pos)
 
@@ -213,7 +277,7 @@ def labor_tab(bundle):
         validation = bundle["validation"]
         violations = validation.get("violations", [])
         if "error" in validation:
-            st.error(f'✖ Labor Rules Engine could not validate the published shifts ({validation["error"]})')
+            st.error(f"✖ Labor Rules Engine could not validate the published shifts ({validation['error']})")
         elif violations:
             st.error(f"✖ {len(violations)} labor-rule violation(s) reported by the Labor Rules Engine")
             st.dataframe(pd.DataFrame(violations), hide_index=True, width="stretch")
@@ -224,13 +288,19 @@ def labor_tab(bundle):
         c[0].metric("Shifts", len(sched))
         hours, cost = _total_or_blank(sched["hours"]), _total_or_blank(sched["est_cost"])
         no_hours, no_cost = sched["hours"].isna().sum(), sched["est_cost"].isna().sum()
-        c[1].metric("Scheduled hours", "—" if pd.isna(hours) else f"{hours:,.1f}",
-                    help=f"{no_hours} shift(s) have no usable start/end time" if no_hours else None)
-        c[2].metric("Est. straight-time cost", "—" if pd.isna(cost) else _money(cost),
-                    help=f"{no_cost} shift(s) lack usable hours or a rostered hourly rate" if no_cost else None)
-        per_emp = (sched.groupby(["employee_id", "name", "role"], as_index=False, dropna=False)
-                   .agg(shifts=("hours", "size"), hours=("hours", _total_or_blank),
-                        est_cost=("est_cost", _total_or_blank)))
+        c[1].metric(
+            "Scheduled hours",
+            "—" if pd.isna(hours) else f"{hours:,.1f}",
+            help=f"{no_hours} shift(s) have no usable start/end time" if no_hours else None,
+        )
+        c[2].metric(
+            "Est. straight-time cost",
+            "—" if pd.isna(cost) else _money(cost),
+            help=f"{no_cost} shift(s) lack usable hours or a rostered hourly rate" if no_cost else None,
+        )
+        per_emp = sched.groupby(["employee_id", "name", "role"], as_index=False, dropna=False).agg(
+            shifts=("hours", "size"), hours=("hours", _total_or_blank), est_cost=("est_cost", _total_or_blank)
+        )
         st.dataframe(per_emp, hide_index=True, width="stretch")
         with st.expander("All shifts"):
             st.dataframe(sched, hide_index=True, width="stretch")
@@ -242,15 +312,17 @@ def labor_tab(bundle):
         roster["available_days"] = roster["available_days"].str.join(", ")
         st.dataframe(roster, hide_index=True, width="stretch")
     with right:
-        st.subheader(f'Labor rules ({bundle["rules"]["jurisdiction"]})')
+        st.subheader(f"Labor rules ({bundle['rules']['jurisdiction']})")
         st.dataframe(pd.Series(bundle["rules"], name="value").astype(str), width="stretch")
 
 
 def inventory_tab(bundle):
     st.subheader("On hand vs par")
-    st.caption("Bar = on hand now. Tick = reorder point. Diamond = projected stock when the vendor's next "
-               "delivery lands (shown for items that need reordering). All as % of par; "
-               "below 0 means a projected stockout before the delivery arrives.")
+    st.caption(
+        "Bar = on hand now. Tick = reorder point. Diamond = projected stock when the vendor's next "
+        "delivery lands (shown for items that need reordering). All as % of par; "
+        "below 0 means a projected stockout before the delivery arrives."
+    )
     st.altair_chart(_on_hand_chart(bundle["on_hand"], bundle["reorder"]), width="stretch")
     with st.expander("On-hand table"):
         st.dataframe(bundle["on_hand"], hide_index=True, width="stretch")
@@ -259,9 +331,13 @@ def inventory_tab(bundle):
     if bundle["anomalies"]:
         anomalies = pd.DataFrame(bundle["anomalies"])
         anomalies["variance"] = anomalies["variance_pct"].map(
-            lambda v: "unexplained usage" if pd.isna(v) else f"{v:+.1f}%")
-        st.dataframe(anomalies.drop(columns=["variance_pct"]), hide_index=True,
-                     column_config={"cost_impact": st.column_config.NumberColumn("cost_impact", format="$%.2f")})
+            lambda v: "unexplained usage" if pd.isna(v) else f"{v:+.1f}%"
+        )
+        st.dataframe(
+            anomalies.drop(columns=["variance_pct"]),
+            hide_index=True,
+            column_config={"cost_impact": st.column_config.NumberColumn("cost_impact", format="$%.2f")},
+        )
     else:
         st.info("No usage anomalies above threshold.")
 
@@ -301,8 +377,13 @@ def _login_panel():
     """Logged out: only the persona selector and Log in (WF1)."""
     user_ids = list(USERS)
     default_user = os.environ.get("HSM_ACTIVE_USER")
-    st.selectbox("Persona", user_ids, index=user_ids.index(default_user) if default_user in user_ids else 0,
-                 key=PERSONA_KEY, format_func=lambda u: USERS[u]["name"])
+    st.selectbox(
+        "Persona",
+        user_ids,
+        index=user_ids.index(default_user) if default_user in user_ids else 0,
+        key=PERSONA_KEY,
+        format_func=lambda u: USERS[u]["name"],
+    )
     if st.button("Log in", key="session-login", type="primary"):
         actions.then_rerun(actions.log_in, st.session_state[PERSONA_KEY])
 
@@ -390,8 +471,11 @@ def main():
         if not sites:
             st.warning("This persona has no sites in scope.")
             st.stop()
-        site_id = st.selectbox("Site", [s["site_id"] for s in sites],
-                               format_func=lambda s: next(x["name"] for x in sites if x["site_id"] == s) + f" ({s})")
+        site_id = st.selectbox(
+            "Site",
+            [s["site_id"] for s in sites],
+            format_func=lambda s: next(x["name"] for x in sites if x["site_id"] == s) + f" ({s})",
+        )
         week = st.radio("Labor demand week", ["This week", "Next week"], index=1, horizontal=True)
         if st.button("Refresh data"):
             # The shared cache and this session's Manage data reads (Q3: B).
@@ -401,7 +485,7 @@ def main():
     with st.spinner("Loading…"):
         bundle = load_site_bundle(user_id, site_id, 0 if week == "This week" else 7)
     site = bundle["site"]
-    st.caption(f'{site["name"]} · {site_id} · {site["jurisdiction"]} · {site["timezone"]}')
+    st.caption(f"{site['name']} · {site_id} · {site['jurisdiction']} · {site['timezone']}")
 
     overview, labor, inventory, manage, audit = st.tabs(["Overview", "Labor", "Inventory", "Manage data", "Audit"])
     with overview:
@@ -422,8 +506,9 @@ def run():
     except HsmApiError as e:
         st.warning(f"HSM API refused the request ({e.status}): {e.message}")
     except urllib.error.URLError as e:
-        st.error(f"Can't reach the HSM backend at {HSM_BASE_URL} ({e.reason}). "
-                 "Start it with `python3 -m mock_hsm.server &`.")
+        st.error(
+            f"Can't reach the HSM backend at {HSM_BASE_URL} ({e.reason}). Start it with `python3 -m mock_hsm.server &`."
+        )
 
 
 run()

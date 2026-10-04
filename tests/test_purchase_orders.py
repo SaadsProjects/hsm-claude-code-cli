@@ -2,6 +2,7 @@
 Scope tests for the mock purchase-order route (mock_hsm/server.py's
 /inventory/purchase-orders handler), called directly -- no HTTP server needed.
 """
+
 import sys
 import threading
 from pathlib import Path
@@ -47,8 +48,7 @@ def test_regional_manager_can_order_for_own_region():
 
 
 def test_regional_manager_cannot_order_for_another_region(monkeypatch):
-    monkeypatch.setitem(db.REGIONS, "region_chi", {"region_id": "region_chi", "name": "Chicago",
-                                                   "org_id": "org_001"})
+    monkeypatch.setitem(db.REGIONS, "region_chi", {"region_id": "region_chi", "name": "Chicago", "org_id": "org_001"})
     assert _status("user_regional_atl", region_id="region_chi") == 403
 
 
@@ -84,12 +84,15 @@ def test_regional_manager_site_po_with_own_region_allowed():
 
 def test_site_po_region_must_contain_the_site(monkeypatch):
     # An admin can reach any site and region, so only the containment check stops this.
-    monkeypatch.setitem(db.REGIONS, "region_chi", {"region_id": "region_chi", "name": "Chicago",
-                                                   "org_id": "org_001"})
+    monkeypatch.setitem(db.REGIONS, "region_chi", {"region_id": "region_chi", "name": "Chicago", "org_id": "org_001"})
     claims = _admin_claims()
     with pytest.raises(ApiError) as exc:
-        inventory_create_po({}, claims, {}, {"vendor_id": "vendor_protein_co", "line_items": LINES,
-                                             "site_id": "site_001", "region_id": "region_chi"})
+        inventory_create_po(
+            {},
+            claims,
+            {},
+            {"vendor_id": "vendor_protein_co", "line_items": LINES, "site_id": "site_001", "region_id": "region_chi"},
+        )
     assert exc.value.status == 400
 
 
@@ -98,8 +101,9 @@ def test_site_po_with_unknown_region_not_found():
 
 
 def test_admin_can_place_region_po():
-    status, po = inventory_create_po({}, _admin_claims(), {}, {"vendor_id": "vendor_protein_co",
-                                                               "line_items": LINES, "region_id": "region_atl"})
+    status, po = inventory_create_po(
+        {}, _admin_claims(), {}, {"vendor_id": "vendor_protein_co", "line_items": LINES, "region_id": "region_atl"}
+    )
     assert status == 201 and po["region_id"] == "region_atl"
 
 
@@ -119,8 +123,7 @@ def http_client():
 
 
 def test_scope_enforced_over_http(http_client, monkeypatch):
-    monkeypatch.setitem(db.REGIONS, "region_chi", {"region_id": "region_chi", "name": "Chicago",
-                                                   "org_id": "org_001"})
+    monkeypatch.setitem(db.REGIONS, "region_chi", {"region_id": "region_chi", "name": "Chicago", "org_id": "org_001"})
     client = http_client("user_regional_atl")
     assert client.submit_purchase_order("vendor_protein_co", LINES, region_id="region_atl")["status"] == "SUBMITTED"
     for kwargs, status in [({"region_id": "region_chi"}, 403), ({"region_id": "region_xyz"}, 404), ({}, 400)]:

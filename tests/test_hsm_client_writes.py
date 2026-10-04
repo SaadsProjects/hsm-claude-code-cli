@@ -13,6 +13,7 @@ reshaper, the write retry and ``retry_write``, and every new public method.
 tests/conftest.py gives every test its own audit file and resets the
 backend's write state afterwards.
 """
+
 import copy
 import http.client
 import json
@@ -53,6 +54,7 @@ RESHAPE_1000_SECONDS = 0.050
 
 
 # ------------------------------------------------------------------ servers
+
 
 @pytest.fixture(scope="module")
 def backend_url():
@@ -183,6 +185,7 @@ def fixed_clock(monkeypatch):
 
 # ------------------------------------------------------------------ helpers
 
+
 def client_for(url, user=REGIONAL, timeout=10):
     return HsmClient(mint_token(user), base_url=url, timeout=timeout)
 
@@ -207,6 +210,7 @@ def last_body(fake_server, index=-1):
 
 
 # ======================================================= Errors and KindTable
+
 
 def test_api_error_two_argument_form_still_works():
     error = HsmApiError(404, "no such thing")
@@ -272,6 +276,7 @@ def test_kind_table_payload_keys_match_backend(backend_url):
 
 # ===================================================== Sender and Reshaper
 
+
 def test_ids_are_quoted_into_paths():
     assert hsm_client._quoted("a/b?x#y") == "a%2Fb%3Fx%23y"
     _, path = hsm_client._kind_route("employee", "s/1?#")
@@ -287,15 +292,18 @@ def test_unknown_kind_and_missing_site_raise_value_error():
             hsm_client._kind_route(kind, None)
 
 
-@pytest.mark.parametrize("action, cause", [
-    ("drop", "RemoteDisconnected"),
-    ("hang", "TimeoutError"),
-    ("bad_status", "BadStatusLine"),
-    ("reset", None),  # ConnectionResetError, or RemoteDisconnected if the reset lands later
-    (("cut", 200, b'{"active": tr', 200), "invalid response body"),
-    (("raw", 200, b"<html>not json</html>"), "invalid response body"),
-    (("raw", 200, b"\xff\xfe\xfa"), "invalid response body"),
-])
+@pytest.mark.parametrize(
+    "action, cause",
+    [
+        ("drop", "RemoteDisconnected"),
+        ("hang", "TimeoutError"),
+        ("bad_status", "BadStatusLine"),
+        ("reset", None),  # ConnectionResetError, or RemoteDisconnected if the reset lands later
+        (("cut", 200, b'{"active": tr', 200), "invalid response body"),
+        (("raw", 200, b"<html>not json</html>"), "invalid response body"),
+        (("raw", 200, b"\xff\xfe\xfa"), "invalid response body"),
+    ],
+)
 def test_each_transport_trigger_is_a_no_answer(fake, action, cause):
     fake.actions = [action]
     client = client_for(fake.url, timeout=0.5)
@@ -332,15 +340,22 @@ def test_invalid_url_propagates_unchanged():
         client._call("GET", "/sessions/abc")
 
 
-@pytest.mark.parametrize("status, payload, message, problems", [
-    (400, b'{"error": "invalid record", "problems": [{"field": "name", "reason": "is required"}]}',
-     "invalid record", [{"field": "name", "reason": "is required"}]),
-    (409, b'{"error": "request id reused", "problems": "not a list"}', "request id reused", []),
-    (400, b'{"detail": "no error key"}', '{"detail": "no error key"}', []),
-    (400, b'{"error": 7}', '{"error": 7}', []),
-    (502, b'["not", "an", "object"]', '["not", "an", "object"]', []),
-    (503, b"Service Unavailable \xff", "Service Unavailable �", []),
-])
+@pytest.mark.parametrize(
+    "status, payload, message, problems",
+    [
+        (
+            400,
+            b'{"error": "invalid record", "problems": [{"field": "name", "reason": "is required"}]}',
+            "invalid record",
+            [{"field": "name", "reason": "is required"}],
+        ),
+        (409, b'{"error": "request id reused", "problems": "not a list"}', "request id reused", []),
+        (400, b'{"detail": "no error key"}', '{"detail": "no error key"}', []),
+        (400, b'{"error": 7}', '{"error": 7}', []),
+        (502, b'["not", "an", "object"]', '["not", "an", "object"]', []),
+        (503, b"Service Unavailable \xff", "Service Unavailable �", []),
+    ],
+)
 def test_error_bodies_map_to_api_error(fake, status, payload, message, problems):
     fake.actions = [("raw", status, payload)]
     with pytest.raises(HsmApiError) as caught:
@@ -379,7 +394,9 @@ def test_reshape_recipe_map():
     lines = [{"raw_material_id": "rm_a", "qty": 1, "uom": "ea"}]
     payload = {"recipes": {"mi_a": lines}, "meta": {"recipe": _meta("mi_a")}}
     assert hsm_client._reshape("recipe", payload) == {
-        "records": [{"menu_item_id": "mi_a", "lines": lines}], "meta": _meta("mi_a")}
+        "records": [{"menu_item_id": "mi_a", "lines": lines}],
+        "meta": _meta("mi_a"),
+    }
 
 
 @pytest.mark.parametrize("kind, key", [("par_level", "par_levels"), ("reorder_point", "reorder_points")])
@@ -387,7 +404,8 @@ def test_reshape_shared_stock_maps(kind, key):
     payload = {key: {"rm_a": 4, "rm_b": 2.5}, "meta": {kind: _meta("rm_a", "rm_b")}}
     assert hsm_client._reshape(kind, payload) == {
         "records": [{"raw_material_id": "rm_a", "qty": 4}, {"raw_material_id": "rm_b", "qty": 2.5}],
-        "meta": _meta("rm_a", "rm_b")}
+        "meta": _meta("rm_a", "rm_b"),
+    }
 
 
 def test_reshape_labor_rules_map():
@@ -397,10 +415,17 @@ def test_reshape_labor_rules_map():
 
 
 def test_reshape_on_hand_keeps_only_on_hand():
-    payload = {"site_id": SITE, "on_hand": {"rm_a": 3}, "par_levels": {"rm_a": 9}, "reorder_points": {"rm_a": 5},
-               "meta": {"on_hand": _meta("rm_a"), "par_level": _meta("rm_a", "x"), "reorder_point": _meta("y")}}
+    payload = {
+        "site_id": SITE,
+        "on_hand": {"rm_a": 3},
+        "par_levels": {"rm_a": 9},
+        "reorder_points": {"rm_a": 5},
+        "meta": {"on_hand": _meta("rm_a"), "par_level": _meta("rm_a", "x"), "reorder_point": _meta("y")},
+    }
     assert hsm_client._reshape("on_hand", payload, SITE) == {
-        "records": [{"site_id": SITE, "raw_material_id": "rm_a", "qty": 3}], "meta": _meta("rm_a")}
+        "records": [{"site_id": SITE, "raw_material_id": "rm_a", "qty": 3}],
+        "meta": _meta("rm_a"),
+    }
 
 
 def test_reshape_missing_payload_key_fails_loudly():
@@ -410,8 +435,10 @@ def test_reshape_missing_payload_key_fails_loudly():
 
 @pytest.mark.perf
 def test_reshape_1000_entries_within_target():
-    payload = {"par_levels": {f"rm_{i:04d}": i for i in range(1000)},
-               "meta": {"par_level": _meta(*(f"rm_{i:04d}" for i in range(1000)))}}
+    payload = {
+        "par_levels": {f"rm_{i:04d}": i for i in range(1000)},
+        "meta": {"par_level": _meta(*(f"rm_{i:04d}" for i in range(1000)))},
+    }
     start = time.perf_counter()
     result = hsm_client._reshape("par_level", payload)
     elapsed = time.perf_counter() - start
@@ -486,8 +513,7 @@ def test_retry_write_after_stored_attempt_returns_the_stored_201(fake, backend_u
     assert [e["outcome"] for e in add_entries("jc_r4")] == ["allowed"]  # no second audit entry
 
 
-def test_retry_write_when_first_attempt_never_arrived_after_logout_is_session_expired(fake, backend_url,
-                                                                                     fixed_clock):
+def test_retry_write_when_first_attempt_never_arrived_after_logout_is_session_expired(fake, backend_url, fixed_clock):
     session = start(backend_url)
     fake.actions = ["drop", "drop"]
     client = client_for(fake.url)
@@ -535,18 +561,24 @@ def test_failed_retry_stays_outcome_unknown_and_can_be_retried(fake, backend_url
     again = second.value
     assert again is not first.value
     assert (again.outcome_unknown, again.request_id, again.retry_deadline) == (
-        True, first.value.request_id, first.value.retry_deadline)
+        True,
+        first.value.request_id,
+        first.value.retry_deadline,
+    )
     assert again.message == "no answer from HSM: TimeoutError"
     assert client.retry_write(again)["record"] == job_code("r8")
     assert len({request for request in fake.requests}) == 1 and len(fake.requests) == 4
 
 
-@pytest.mark.parametrize("error", [
-    HsmApiError(400, "invalid record"),
-    HsmUnavailable("no answer from HSM: TimeoutError"),  # a read: outcome known
-    HsmUnavailable("forged", outcome_unknown=True, request_id="x", retry_deadline=FIXED_NOW),  # not in the store
-    "not an error",
-])
+@pytest.mark.parametrize(
+    "error",
+    [
+        HsmApiError(400, "invalid record"),
+        HsmUnavailable("no answer from HSM: TimeoutError"),  # a read: outcome known
+        HsmUnavailable("forged", outcome_unknown=True, request_id="x", retry_deadline=FIXED_NOW),  # not in the store
+        "not an error",
+    ],
+)
 def test_retry_write_refuses_anything_else(refused_url, error):
     with pytest.raises(ValueError, match="retry not allowed"):
         client_for(refused_url).retry_write(error)
@@ -618,6 +650,7 @@ def test_publish_and_submit_are_never_retried(fake):
 
 # ========================================================= Public methods
 
+
 def _record(kind, tag):
     """A valid record per kind; references name the prerequisites below."""
     return {
@@ -625,17 +658,34 @@ def _record(kind, tag):
         "recipe": {"menu_item_id": f"mi_{tag}", "lines": [{"raw_material_id": "rm_w", "qty": 1, "uom": "u_w"}]},
         "raw_material": {"raw_material_id": f"rm_{tag}", "name": f"RM {tag}", "uom": "u_w"},
         "uom": {"uom_id": f"u_{tag}", "name": f"unit {tag}", "base": f"u_{tag}", "factor_to_base": 1},
-        "vendor": {"vendor_id": f"v_{tag}", "name": "Vendor", "lead_time_days": 2, "price_list": {"rm_w": 1.25},
-                   "min_order_value": 10},
-        "employee": {"name": f"Emp {tag}", "job_code": "jc_w", "hourly_rate": 14.5,
-                     "max_weekly_hours_preference": 30, "available_days": ["Mon", "Wed"]},
+        "vendor": {
+            "vendor_id": f"v_{tag}",
+            "name": "Vendor",
+            "lead_time_days": 2,
+            "price_list": {"rm_w": 1.25},
+            "min_order_value": 10,
+        },
+        "employee": {
+            "name": f"Emp {tag}",
+            "job_code": "jc_w",
+            "hourly_rate": 14.5,
+            "max_weekly_hours_preference": 30,
+            "available_days": ["Mon", "Wed"],
+        },
         "job_code": job_code(tag),
         "on_hand": {"raw_material_id": f"rm_{tag}", "qty": 5},
         "par_level": {"raw_material_id": f"rm_{tag}", "qty": 5},
         "reorder_point": {"raw_material_id": f"rm_{tag}", "qty": 5},
-        "labor_rule": {"jurisdiction": f"J_{tag}", "weekly_ot_threshold_hours": 40, "daily_ot_threshold_hours": 8,
-                       "ot_multiplier": 1.5, "max_consecutive_days": 6, "min_rest_hours_between_shifts": 10,
-                       "max_shift_length_hours": 10, "note": "Test rule"},
+        "labor_rule": {
+            "jurisdiction": f"J_{tag}",
+            "weekly_ot_threshold_hours": 40,
+            "daily_ot_threshold_hours": 8,
+            "ot_multiplier": 1.5,
+            "max_consecutive_days": 6,
+            "min_rest_hours_between_shifts": 10,
+            "max_shift_length_hours": 10,
+            "note": "Test rule",
+        },
     }[kind]
 
 
@@ -653,8 +703,11 @@ def regional(backend_url):
     """A Regional Manager client and session, with the records other kinds refer to."""
     client = client_for(backend_url)
     session = client.start_session()["session_id"]
-    for kind, record in (("uom", _record("uom", "w")), ("raw_material", _record("raw_material", "w")),
-                         ("job_code", job_code("w"))):
+    for kind, record in (
+        ("uom", _record("uom", "w")),
+        ("raw_material", _record("raw_material", "w")),
+        ("job_code", job_code("w")),
+    ):
         client.add_record(kind, record, session)
     return client, session
 
@@ -714,15 +767,18 @@ def test_list_records_labor_rules(regional):
     assert set(result["meta"]) == {"GA"}
 
 
-@pytest.mark.parametrize("call", [
-    lambda c: c.list_records("employee"),
-    lambda c: c.add_record("on_hand", {"raw_material_id": "rm_x", "qty": 1}, "s"),
-    lambda c: c.update_record("employee", "emp_1", {}, 1, "s"),
-    lambda c: c.delete_record("on_hand", "rm_x", 1, "s"),
-    lambda c: c.bulk_add("employee", [], "f.csv", "s"),
-    lambda c: c.csv_template("on_hand"),
-    lambda c: c.add_record("menu", {}, "s"),
-])
+@pytest.mark.parametrize(
+    "call",
+    [
+        lambda c: c.list_records("employee"),
+        lambda c: c.add_record("on_hand", {"raw_material_id": "rm_x", "qty": 1}, "s"),
+        lambda c: c.update_record("employee", "emp_1", {}, 1, "s"),
+        lambda c: c.delete_record("on_hand", "rm_x", 1, "s"),
+        lambda c: c.bulk_add("employee", [], "f.csv", "s"),
+        lambda c: c.csv_template("on_hand"),
+        lambda c: c.add_record("menu", {}, "s"),
+    ],
+)
 def test_site_kind_without_site_or_unknown_kind_raises_before_any_request(refused_url, call):
     with pytest.raises(ValueError):
         call(client_for(refused_url))  # a request would have raised HsmUnavailable instead
@@ -860,10 +916,13 @@ def test_write_without_any_answer_raises_after_exactly_two_attempts(fake, fixed_
 # 503s being final (NFR2.1), a copied error being refused (NFR2.2) and
 # concurrent double failures each retried to its own record (NFR4.4).
 
+
 def test_session_calls_quote_the_session_id(fake):
     session = "s/1?x#y"
-    fake.actions = [("raw", 200, b'{"active": true, "ended_reason": null}'),
-                    ("raw", 200, b'{"active": false, "ended_reason": "logout"}')]
+    fake.actions = [
+        ("raw", 200, b'{"active": true, "ended_reason": null}'),
+        ("raw", 200, b'{"active": false, "ended_reason": "logout"}'),
+    ]
     client = client_for(fake.url)
     assert client.session_status(session) == {"active": True, "ended_reason": None}
     assert client.end_session(session) == {"active": False, "ended_reason": "logout"}
@@ -915,9 +974,16 @@ def _outcome_unknown_case(backend_url, fake):
     return caught.value, session
 
 
-@pytest.mark.parametrize("make_error", [
-    _error_status_case, _session_expired_case, _read_no_answer_case, _outcome_unknown_case,
-], ids=["error-status", "session-expired", "read-no-answer", "outcome-unknown-write"])
+@pytest.mark.parametrize(
+    "make_error",
+    [
+        _error_status_case,
+        _session_expired_case,
+        _read_no_answer_case,
+        _outcome_unknown_case,
+    ],
+    ids=["error-status", "session-expired", "read-no-answer", "outcome-unknown-write"],
+)
 def test_every_error_path_exposes_no_session_id(backend_url, fake, make_error):
     error, session = make_error(backend_url, fake)
     assert len(session) >= 16  # a real backend session id, so a leak would be visible
@@ -954,7 +1020,10 @@ def test_retry_write_refuses_a_copied_error(fake, fixed_clock):
     copied = copy.copy(original)
     assert copied is not original
     assert (copied.outcome_unknown, copied.request_id, copied.retry_deadline) == (
-        True, original.request_id, original.retry_deadline)
+        True,
+        original.request_id,
+        original.retry_deadline,
+    )
     with pytest.raises(ValueError, match="retry not allowed for request"):
         client.retry_write(copied)
     assert len(fake.requests) == 2  # nothing more was sent

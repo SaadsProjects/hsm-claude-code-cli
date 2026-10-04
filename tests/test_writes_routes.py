@@ -7,6 +7,7 @@ and the employee roster. The ``perf`` tests measure the NFR4 targets and
 the NFR1.7 concurrency result with in-process calls; each failure message
 carries the measured value next to its target.
 """
+
 import http.client
 import json
 import statistics
@@ -99,17 +100,34 @@ def _record(kind, tag):
         "recipe": {"menu_item_id": f"mi_{tag}", "lines": [{"raw_material_id": "rm_w", "qty": 1, "uom": "u_w"}]},
         "raw_material": {"raw_material_id": f"rm_{tag}", "name": f"RM {tag}", "uom": "u_w"},
         "uom": _uom(f"u_{tag}"),
-        "vendor": {"vendor_id": f"v_{tag}", "name": "Vendor", "lead_time_days": 2, "price_list": {"rm_w": 1.25},
-                   "min_order_value": 10},
-        "employee": {"name": f"Emp {tag}", "job_code": "jc_w", "hourly_rate": 14.5,
-                     "max_weekly_hours_preference": 30, "available_days": ["Mon", "Wed"]},
+        "vendor": {
+            "vendor_id": f"v_{tag}",
+            "name": "Vendor",
+            "lead_time_days": 2,
+            "price_list": {"rm_w": 1.25},
+            "min_order_value": 10,
+        },
+        "employee": {
+            "name": f"Emp {tag}",
+            "job_code": "jc_w",
+            "hourly_rate": 14.5,
+            "max_weekly_hours_preference": 30,
+            "available_days": ["Mon", "Wed"],
+        },
         "job_code": {"job_code": f"jc_{tag}", "title": "Title"},
         "on_hand": {"raw_material_id": f"rm_{tag}", "qty": 5},
         "par_level": {"raw_material_id": f"rm_{tag}", "qty": 5},
         "reorder_point": {"raw_material_id": f"rm_{tag}", "qty": 5},
-        "labor_rule": {"jurisdiction": f"J_{tag}", "weekly_ot_threshold_hours": 40, "daily_ot_threshold_hours": 8,
-                       "ot_multiplier": 1.5, "max_consecutive_days": 6, "min_rest_hours_between_shifts": 10,
-                       "max_shift_length_hours": 10, "note": "Test rule"},
+        "labor_rule": {
+            "jurisdiction": f"J_{tag}",
+            "weekly_ot_threshold_hours": 40,
+            "daily_ot_threshold_hours": 8,
+            "ot_multiplier": 1.5,
+            "max_consecutive_days": 6,
+            "min_rest_hours_between_shifts": 10,
+            "max_shift_length_hours": 10,
+            "note": "Test rule",
+        },
     }[kind]
 
 
@@ -135,13 +153,17 @@ def _prereqs(client, kind, tag):
 @pytest.fixture
 def regional(base_url):
     client = Client(base_url, REGIONAL)
-    for kind, record in (("uom", _uom("u_w")), ("raw_material", _record("raw_material", "w")),
-                         ("job_code", {"job_code": "jc_w", "title": "Worker"})):
+    for kind, record in (
+        ("uom", _uom("u_w")),
+        ("raw_material", _record("raw_material", "w")),
+        ("job_code", {"job_code": "jc_w", "title": "Worker"}),
+    ):
         assert client.send("POST", _paths(kind)[0], record=record)[0] == 201
     return client
 
 
 # =================================================================== sessions
+
 
 def test_session_start_logout_and_status(base_url):
     client = Client(base_url, DEV)
@@ -174,6 +196,7 @@ def test_a_bad_token_gets_401_before_any_route(base_url):
 
 # ============================================================ per-kind routes
 
+
 @pytest.mark.parametrize("kind", list(writes.KINDS))
 def test_each_kinds_routes_work(regional, kind):
     collection, item = _paths(kind)
@@ -186,8 +209,13 @@ def test_each_kinds_routes_work(regional, kind):
     status, body = regional.send("PUT", item.format(record_id=key), record=_record(kind, "one"), version=1)
     assert (status, body["meta"]["version"]) == (200, 2), body
     _prereqs(regional, kind, "two")
-    status, body = regional.send("POST", collection + "/bulk", source="csv", file_name="f.csv",
-                                 rows=[{"row": 1, "record": _csv_row(kind, "two")}])
+    status, body = regional.send(
+        "POST",
+        collection + "/bulk",
+        source="csv",
+        file_name="f.csv",
+        rows=[{"row": 1, "record": _csv_row(kind, "two")}],
+    )
     assert (status, body["added"]) == (201, 1), body
     bulk_key = body["records"][0]["record"]["employee_id" if kind == "employee" else writes.KINDS[kind].key]
     assert regional.send("DELETE", item.format(record_id=key), version=2)[0] == 200
@@ -197,12 +225,18 @@ def test_each_kinds_routes_work(regional, kind):
 
 
 def test_site_kinds_take_their_site_from_the_path(regional):
-    status, body = regional.send("POST", "/inventory/sites/site_003/on-hand",
-                                 record={"raw_material_id": "rm_w", "qty": 4, "site_id": "site_001"})
+    status, body = regional.send(
+        "POST", "/inventory/sites/site_003/on-hand", record={"raw_material_id": "rm_w", "qty": 4, "site_id": "site_001"}
+    )
     assert status == 201 and body["record"] == {"site_id": "site_003", "raw_material_id": "rm_w", "qty": 4}
     assert db.ON_HAND["site_003"]["rm_w"] == 4 and "rm_w" not in db.ON_HAND["site_001"]
-    status, body = regional.send("POST", "/labor/sites/site_002/employees/bulk", source="csv", file_name="e.csv",
-                                 rows=[{"row": 1, "record": {**_csv_row("employee", "s"), "site_id": "site_001"}}])
+    status, body = regional.send(
+        "POST",
+        "/labor/sites/site_002/employees/bulk",
+        source="csv",
+        file_name="e.csv",
+        rows=[{"row": 1, "record": {**_csv_row("employee", "s"), "site_id": "site_001"}}],
+    )
     assert status == 201 and body["records"][0]["record"]["site_id"] == "site_002"
     status, body = regional.call("GET", "/inventory/sites/site_404/on-hand/template")
     assert status == 404
@@ -232,6 +266,7 @@ def test_refusals_carry_error_and_problems(regional):
 
 # ================================================================ reads (C6)
 
+
 def test_existing_get_payloads_are_unchanged(regional):
     """NFR4.4: the same keys and values as before, for seeded data."""
     expected = {
@@ -243,10 +278,16 @@ def test_existing_get_payloads_are_unchanged(regional):
         "/sales/gl-codes": {"gl_codes": ["GL-BEV", "GL-FOOD"]},
         "/inventory/recipes/mi_burger": {"menu_item_id": "mi_burger", "lines": db.RECIPES["mi_burger"]},
         "/labor/rules?jurisdiction=GA": db.LABOR_RULES_BY_JURISDICTION["GA"],
-        "/inventory/sites/site_002/on-hand": {"site_id": "site_002", "on_hand": db.ON_HAND["site_002"],
-                                              "par_levels": db.PAR_LEVELS, "reorder_points": db.REORDER_POINTS},
-        "/labor/sites/site_003/employees": {"site_id": "site_003", "employees": [
-            e for e in db.EMPLOYEES.values() if e["site_id"] == "site_003"]},
+        "/inventory/sites/site_002/on-hand": {
+            "site_id": "site_002",
+            "on_hand": db.ON_HAND["site_002"],
+            "par_levels": db.PAR_LEVELS,
+            "reorder_points": db.REORDER_POINTS,
+        },
+        "/labor/sites/site_003/employees": {
+            "site_id": "site_003",
+            "employees": [e for e in db.EMPLOYEES.values() if e["site_id"] == "site_003"],
+        },
     }
     for path, payload in expected.items():
         status, body = regional.call("GET", path)
@@ -273,10 +314,15 @@ def test_with_meta_returns_the_documented_shapes(regional):
     status, body = regional.call("GET", "/labor/sites/site_002/employees?with=meta")
     assert set(body["meta"]["employee"]) == {e["employee_id"] for e in body["employees"]}
     status, body = regional.call("GET", "/labor/rules?with=meta")
-    assert body == {"rules": db.LABOR_RULES_BY_JURISDICTION,
-                    "meta": {"labor_rule": {"GA": writes.meta_map("labor_rule")["GA"]}}}
+    assert body == {
+        "rules": db.LABOR_RULES_BY_JURISDICTION,
+        "meta": {"labor_rule": {"GA": writes.meta_map("labor_rule")["GA"]}},
+    }
     status, body = regional.call("GET", "/labor/rules?jurisdiction=GA&with=meta")
-    assert body == {**db.LABOR_RULES_BY_JURISDICTION["GA"], "meta": {"labor_rule": {"GA": body["meta"]["labor_rule"]["GA"]}}}
+    assert body == {
+        **db.LABOR_RULES_BY_JURISDICTION["GA"],
+        "meta": {"labor_rule": {"GA": body["meta"]["labor_rule"]["GA"]}},
+    }
     assert regional.call("GET", "/labor/rules?jurisdiction=XX&with=meta")[0] == 404
     assert regional.session not in json.dumps(regional.call("GET", "/inventory/raw-materials?with=meta")[1])
 
@@ -289,6 +335,7 @@ def test_reads_keep_working_while_the_audit_trail_is_down(regional, monkeypatch)
 
 
 # ================================================================ dispatcher
+
 
 def _raw(base_url, method, path, headers, body=b""):
     host, port = base_url.removeprefix("http://").split(":")
@@ -312,14 +359,15 @@ def test_a_missing_content_length_works_for_get(base_url):
 
 @pytest.mark.parametrize("value", ["abc", "-1", "1.5", "+5", "1_0", ""])
 def test_an_invalid_content_length_gets_400(base_url, value):
-    assert _raw(base_url, "POST", "/sessions", {"Content-Length": value}) == (
-        400, {"error": "invalid Content-Length"})
+    assert _raw(base_url, "POST", "/sessions", {"Content-Length": value}) == (400, {"error": "invalid Content-Length"})
 
 
 def test_a_2_mib_body_is_drained_and_gets_400(base_url):
     body = b" " * (2 * 1024 * 1024)
     assert _raw(base_url, "POST", "/sales/job-codes", {"Content-Length": str(len(body))}, body) == (
-        400, {"error": "request too large"})
+        400,
+        {"error": "request too large"},
+    )
     assert _entries() == []
 
 
@@ -327,11 +375,14 @@ def test_a_body_over_8_mib_is_refused_without_reading(base_url):
     assert _raw(base_url, "POST", "/sales/job-codes", {"Content-Length": str(9 * 1024 * 1024)})[0] == 400
 
 
-@pytest.mark.parametrize("body", [b'{"record": ' + b"9" * 5000 + b"}", b"[" * 200000 + b"]" * 200000,
-                                  b"{not json", b'"\xff"'])
+@pytest.mark.parametrize(
+    "body", [b'{"record": ' + b"9" * 5000 + b"}", b"[" * 200000 + b"]" * 200000, b"{not json", b'"\xff"']
+)
 def test_unparseable_bodies_get_an_unaudited_400(base_url, body):
     assert _raw(base_url, "POST", "/sales/job-codes", {"Content-Length": str(len(body))}, body) == (
-        400, {"error": "invalid JSON body"})
+        400,
+        {"error": "invalid JSON body"},
+    )
     assert _entries() == []
 
 
@@ -342,14 +393,24 @@ def test_put_and_delete_reach_the_dispatcher(regional):
 
 # ================================================================ data reach
 
+
 def test_added_raw_material_with_stock_and_vendor_reaches_reorder_needs(regional):
     """BR11.1: the reorder calculation sees dashboard-added records."""
     regional.send("POST", "/inventory/raw-materials", record={"raw_material_id": "rm_new", "name": "New", "uom": "u_w"})
     regional.send("POST", "/inventory/sites/site_001/on-hand", record={"raw_material_id": "rm_new", "qty": 1})
     regional.send("POST", "/inventory/reorder-points", record={"raw_material_id": "rm_new", "qty": 5})
     regional.send("POST", "/inventory/par-levels", record={"raw_material_id": "rm_new", "qty": 20})
-    regional.send("POST", "/inventory/vendors", record={"vendor_id": "v_new", "name": "New Co.", "lead_time_days": 1,
-                                                        "price_list": {"rm_new": 2.5}, "min_order_value": 0})
+    regional.send(
+        "POST",
+        "/inventory/vendors",
+        record={
+            "vendor_id": "v_new",
+            "name": "New Co.",
+            "lead_time_days": 1,
+            "price_list": {"rm_new": 2.5},
+            "min_order_value": 0,
+        },
+    )
     forecast = regional.call("GET", "/forecast/sites/site_001/sales?start_offset_days=0&days=7")[1]["forecast"]
     on_hand = regional.call("GET", "/inventory/sites/site_001/on-hand")[1]
     items = {item for day in forecast for item in day["items"]}
@@ -368,6 +429,7 @@ def test_an_added_employee_appears_in_the_site_roster(regional, base_url):
 
 
 # =========================================================== perf (NFR4, NFR1.7)
+
 
 def _claims(user):
     return verify_token(mint_token(user))
@@ -393,8 +455,11 @@ def test_nfr4_1_single_write_p95_within_200_ms():
     assert _add(claims, setup, "uom", _uom("u_perf"))[0] == 201
     session, samples = _session(REGIONAL), []
     for i in range(200):
-        kind, record = (("raw_material", {"raw_material_id": f"rm_p{i}", "name": "P", "uom": "u_perf"}) if i < 100
-                        else ("job_code", {"job_code": f"jc_p{i}", "title": "P"}))
+        kind, record = (
+            ("raw_material", {"raw_material_id": f"rm_p{i}", "name": "P", "uom": "u_perf"})
+            if i < 100
+            else ("job_code", {"job_code": f"jc_p{i}", "title": "P"})
+        )
         start = time.perf_counter()
         status, _ = _add(claims, session, kind, record)
         samples.append(time.perf_counter() - start)
@@ -409,8 +474,17 @@ def _recipe_rows(bad=False):
     for r in range(100):
         for line in range(5):
             n += 1
-            rows.append({"row": n, "record": {"menu_item_id": f"mi_p{r}", "raw_material_id": f"rm_p{line + r % 95}",
-                                              "qty": "0.5", "uom": f"u_p{line}"}})
+            rows.append(
+                {
+                    "row": n,
+                    "record": {
+                        "menu_item_id": f"mi_p{r}",
+                        "raw_material_id": f"rm_p{line + r % 95}",
+                        "qty": "0.5",
+                        "uom": f"u_p{line}",
+                    },
+                }
+            )
     if bad:
         rows[250]["record"]["qty"] = "-1"
     return rows
@@ -422,20 +496,31 @@ def test_nfr4_2_a_500_line_recipe_file_within_2_seconds():
     units, materials, items = _session(REGIONAL), _session(REGIONAL), _session(REGIONAL)
     for i in range(100):
         assert _add(claims, units, "uom", _uom(f"u_p{i}"))[0] == 201
-        assert _add(claims, materials, "raw_material", {"raw_material_id": f"rm_p{i}", "name": "P",
-                                                        "uom": f"u_p{i}"})[0] == 201
-        assert _add(claims, items, "menu_item", {"menu_item_id": f"mi_p{i}", "name": "P", "gl_code": "GL-FOOD"})[0] == 201
+        assert (
+            _add(claims, materials, "raw_material", {"raw_material_id": f"rm_p{i}", "name": "P", "uom": f"u_p{i}"})[0]
+            == 201
+        )
+        assert (
+            _add(claims, items, "menu_item", {"menu_item_id": f"mi_p{i}", "name": "P", "gl_code": "GL-FOOD"})[0] == 201
+        )
     timings = {}
     for label, bad, expected in (("refused", True, 400), ("accepted", False, 201)):
-        body = {"session_id": _session(REGIONAL), "request_id": str(uuid.uuid4()), "source": "csv",
-                "file_name": "recipes.csv", "rows": _recipe_rows(bad)}
+        body = {
+            "session_id": _session(REGIONAL),
+            "request_id": str(uuid.uuid4()),
+            "source": "csv",
+            "file_name": "recipes.csv",
+            "rows": _recipe_rows(bad),
+        }
         start = time.perf_counter()
         status, payload = writes.bulk("recipe", claims, None, body)
         timings[label] = time.perf_counter() - start
         assert status == expected, payload.get("problems", payload)[:3]
     assert len([r for r in db.RECIPES if r.startswith("mi_p")]) == 100
-    print(f"\n[perf] NFR4.2 500-line file: refused {timings['refused']:.3f} s, "
-          f"accepted {timings['accepted']:.3f} s (target <= 2 s each)")
+    print(
+        f"\n[perf] NFR4.2 500-line file: refused {timings['refused']:.3f} s, "
+        f"accepted {timings['accepted']:.3f} s (target <= 2 s each)"
+    )
     for label, seconds in timings.items():
         assert seconds <= BULK_FILE_SECONDS, f"{label} file took {seconds:.3f} s > target 2 s"
 
@@ -462,8 +547,9 @@ def test_nfr4_3_reads_slow_by_at_most_50_ms_under_single_writes():
         while not stop.is_set():
             if n and n % 100 == 0:
                 session = _session(REGIONAL)
-            status, _ = _add(claims, session, "raw_material", {"raw_material_id": f"rm_w{n}", "name": "W",
-                                                               "uom": "u_rw"})
+            status, _ = _add(
+                claims, session, "raw_material", {"raw_material_id": f"rm_w{n}", "name": "W", "uom": "u_rw"}
+            )
             if status != 201:
                 writer_errors.append(status)
             n += 1
@@ -478,8 +564,10 @@ def test_nfr4_3_reads_slow_by_at_most_50_ms_under_single_writes():
         stop.set()
         thread.join()
     slowdown = loaded - alone
-    print(f"\n[perf] NFR4.3 read p95 alone {alone * 1000:.2f} ms, with writer {loaded * 1000:.2f} ms, "
-          f"slowdown {slowdown * 1000:.2f} ms (target <= 50 ms; writer made {added[0]} adds)")
+    print(
+        f"\n[perf] NFR4.3 read p95 alone {alone * 1000:.2f} ms, with writer {loaded * 1000:.2f} ms, "
+        f"slowdown {slowdown * 1000:.2f} ms (target <= 50 ms; writer made {added[0]} adds)"
+    )
     assert writer_errors == [] and added[0] > 0
     assert slowdown <= READ_SLOWDOWN_P95_SECONDS, f"slowdown {slowdown * 1000:.2f} ms > target 50 ms"
 
@@ -494,8 +582,9 @@ def test_nfr1_7_ten_threads_add_200_records_with_210_entries():
     def adder(t):
         session = _session(REGIONAL)
         for i in range(20):
-            status, body = _add(claims, session, "raw_material", {"raw_material_id": f"rm_c{t}_{i}", "name": "C",
-                                                                  "uom": "u_c"})
+            status, body = _add(
+                claims, session, "raw_material", {"raw_material_id": f"rm_c{t}_{i}", "name": "C", "uom": "u_c"}
+            )
             if status != 201:
                 errors.append(body)
 
@@ -525,6 +614,7 @@ def test_nfr1_7_ten_threads_add_200_records_with_210_entries():
 
 # ============================================ code-review fixes (iteration 1)
 
+
 def test_a_401_is_not_stored_so_a_retry_after_relogin_works(base_url):
     # Review R-01: a 401 is never stored under its request id.
     client = Client(base_url, REGIONAL)
@@ -548,8 +638,7 @@ def test_a_typed_id_cannot_forge_an_audit_log_line(regional, monkeypatch, capsys
     assert all(line.startswith("[mock-hsm] ") for line in err.splitlines() if line)
 
 
-@pytest.mark.parametrize("text, expected", [("10", 10), ("12.5", 12.5), (".5", 0.5),
-                                            ("1000000000", 1000000000)])
+@pytest.mark.parametrize("text, expected", [("10", 10), ("12.5", 12.5), (".5", 0.5), ("1000000000", 1000000000)])
 def test_cell_numbers_accept_plain_ascii_decimals_exactly(text, expected):
     # Review R-03: whole numbers are read exactly, decimals as plain ASCII.
     # Values above writes.MAX_NUMBER are refused (see test_writes_core).
@@ -564,8 +653,7 @@ def test_cell_numbers_refuse_other_forms(text):
 def test_a_zero_padded_content_length_is_read_as_its_value(base_url):
     # Review R-05: leading zeros don't make a small body "too large".
     body = b'{"x": 1}'
-    status, _ = _raw(base_url, "POST", "/labor/rules/validate",
-                     {"Content-Length": "0" * 12 + str(len(body))}, body)
+    status, _ = _raw(base_url, "POST", "/labor/rules/validate", {"Content-Length": "0" * 12 + str(len(body))}, body)
     assert status == 404  # parsed and routed: no jurisdiction given, not "request too large"
 
 
@@ -575,7 +663,9 @@ def test_seeded_payloads_are_pinned_and_validate_returns_a_copy(regional):
     assert status == 200
     assert {"menu_item_id": "mi_burger", "name": "Classic Burger", "gl_code": "GL-FOOD"} in menu["menu_items"]
     assert regional.call("GET", "/inventory/recipes/mi_soda") == (
-        200, {"menu_item_id": "mi_soda", "lines": [{"raw_material_id": "rm_soda_syrup", "qty": 4, "uom": "oz"}]})
+        200,
+        {"menu_item_id": "mi_soda", "lines": [{"raw_material_id": "rm_soda_syrup", "qty": 4, "uom": "oz"}]},
+    )
     assert regional.call("GET", "/sales/gl-codes") == (200, {"gl_codes": ["GL-BEV", "GL-FOOD"]})
     status, result = regional.call("POST", "/labor/rules/validate", {"jurisdiction": "GA", "shifts": []})
     assert status == 200 and result["violations"] == []

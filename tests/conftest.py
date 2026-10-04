@@ -6,6 +6,7 @@ The mock backend audits gated writes into the file named by HSM_AUDIT_PATH
 submits a PO -- directly or through an in-process HTTP server -- would write
 to the real default file, mock_hsm/audit/audit.jsonl.
 """
+
 import sys
 from pathlib import Path
 

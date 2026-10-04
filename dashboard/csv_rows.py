@@ -8,6 +8,7 @@ audited). Cell values are never converted or judged: the backend checks them.
 encode it, so an oversized file never meets the backend's 1 MiB body limit.
 No Streamlit import.
 """
+
 import csv
 import io
 import json
@@ -84,9 +85,13 @@ def encoded_bulk_size(rows, file_name, session_id=None, request_id=None):
     """Bytes in the bulk request body as ``HsmClient._write`` encodes it
     (``json.dumps`` defaults: non-ASCII is escaped). Ids not yet known are
     measured with placeholders of their real length."""
-    body = {"session_id": session_id or "x" * SESSION_ID_LENGTH,
-            "request_id": request_id or "x" * REQUEST_ID_LENGTH,
-            "source": "csv", "file_name": file_name, "rows": rows}
+    body = {
+        "session_id": session_id or "x" * SESSION_ID_LENGTH,
+        "request_id": request_id or "x" * REQUEST_ID_LENGTH,
+        "source": "csv",
+        "file_name": file_name,
+        "rows": rows,
+    }
     return len(json.dumps(body).encode())
 
 

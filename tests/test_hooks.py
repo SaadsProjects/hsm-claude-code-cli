@@ -4,6 +4,7 @@ drives it: a JSON payload on stdin, a JSON decision on stdout. The hook must
 deny on violations AND on every failure to validate -- a crashed or
 timed-out hook is non-blocking in Claude Code, i.e. it fails open.
 """
+
 import json
 import os
 import socket
@@ -24,6 +25,7 @@ TEST_PORT = 8773
 @pytest.fixture(scope="module")
 def backend_url():
     from mock_hsm.server import Handler, ThreadingHTTPServer
+
     server = ThreadingHTTPServer(("127.0.0.1", TEST_PORT), Handler)
     threading.Thread(target=server.serve_forever, daemon=True).start()
     yield f"http://127.0.0.1:{TEST_PORT}"
@@ -38,16 +40,17 @@ def _run_hook(shifts, base_url, user="user_rm_midtown", stdin=None):
         env["HSM_ACTIVE_USER"] = user
     if stdin is None:
         stdin = json.dumps({"tool_name": "mcp__hsm__publish_schedule", "tool_input": {"shifts": shifts}})
-    proc = subprocess.run([sys.executable, str(HOOK)], input=stdin, capture_output=True,
-                          text=True, env=env, timeout=25, check=False)
+    proc = subprocess.run(
+        [sys.executable, str(HOOK)], input=stdin, capture_output=True, text=True, env=env, timeout=25, check=False
+    )
     assert proc.returncode == 0, proc.stderr
     return json.loads(proc.stdout).get("hookSpecificOutput", {}).get("permissionDecision")
 
 
-CLEAN = [{"employee_id": "emp_1", "date": "2026-10-01", "role": "JC-COOK",
-          "start_time": "09:00", "end_time": "17:00"}]
-OVERNIGHT_TOO_LONG = [{"employee_id": "emp_1", "date": "2026-10-01", "role": "JC-COOK",
-                       "start_time": "20:00", "end_time": "08:00"}]
+CLEAN = [{"employee_id": "emp_1", "date": "2026-10-01", "role": "JC-COOK", "start_time": "09:00", "end_time": "17:00"}]
+OVERNIGHT_TOO_LONG = [
+    {"employee_id": "emp_1", "date": "2026-10-01", "role": "JC-COOK", "start_time": "20:00", "end_time": "08:00"}
+]
 
 
 def test_clean_schedule_falls_through(backend_url):

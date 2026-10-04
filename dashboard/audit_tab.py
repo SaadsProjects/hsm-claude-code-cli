@@ -12,6 +12,7 @@ export control (FR9.4).
 Entries and their changes are drawn as data frames, which do not interpret
 Markdown (NFR1.5); session ids were dropped when the page was loaded (NFR1.4).
 """
+
 import json
 
 import pandas as pd
@@ -22,14 +23,25 @@ from dashboard.safe_text import escape_md
 
 ALL = "All"
 OUTCOMES = (ALL, "allowed", "violation")
-COLUMNS = (("timestamp", "time"), ("user_id", "user"), ("persona", "persona"), ("action", "action"),
-           ("kind", "kind of record"), ("record_id", "record"), ("site_id", "site"), ("outcome", "outcome"),
-           ("reason", "reason"), ("file_row", "row"))
+COLUMNS = (
+    ("timestamp", "time"),
+    ("user_id", "user"),
+    ("persona", "persona"),
+    ("action", "action"),
+    ("kind", "kind of record"),
+    ("record_id", "record"),
+    ("site_id", "site"),
+    ("outcome", "outcome"),
+    ("reason", "reason"),
+    ("file_row", "row"),
+)
 
 
 def _frame(entries):
-    return pd.DataFrame([{label: entry.get(name) for name, label in COLUMNS} for entry in entries],
-                        columns=[label for _, label in COLUMNS])
+    return pd.DataFrame(
+        [{label: entry.get(name) for name, label in COLUMNS} for entry in entries],
+        columns=[label for _, label in COLUMNS],
+    )
 
 
 def _flatten(value, prefix=""):
@@ -44,8 +56,10 @@ def _flatten(value, prefix=""):
 
 def _changes(entry):
     pairs = _flatten(entry.get("changes") or {})
-    return pd.DataFrame([{"change": path, "value": "" if value is None else str(value)} for path, value in pairs],
-                        columns=["change", "value"])
+    return pd.DataFrame(
+        [{"change": path, "value": "" if value is None else str(value)} for path, value in pairs],
+        columns=["change", "value"],
+    )
 
 
 def _filtered(entries):
@@ -53,8 +67,11 @@ def _filtered(entries):
     outcome, kind = st.columns(2)
     picked_outcome = outcome.selectbox("Outcome", OUTCOMES, key="audit-outcome")
     picked_kind = kind.selectbox("Kind of record", [ALL, *kinds], key="audit-kind")
-    return [entry for entry in entries
-            if picked_outcome in (ALL, entry.get("outcome")) and picked_kind in (ALL, entry.get("kind"))]
+    return [
+        entry
+        for entry in entries
+        if picked_outcome in (ALL, entry.get("outcome")) and picked_kind in (ALL, entry.get("kind"))
+    ]
 
 
 def render():

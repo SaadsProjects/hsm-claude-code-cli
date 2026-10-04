@@ -40,6 +40,7 @@ session's Manage data reads) are cleared and the loaded audit entries
 emptied, so every tab shows the latest state (BR3.3). Nothing here draws,
 prints or logs; problems are reported through ``notice``.
 """
+
 import contextlib
 import functools
 import hashlib
@@ -92,6 +93,7 @@ def then_rerun(action, *args, **kwargs):
 
 # ------------------------------------------------------------------ notices
 
+
 def _notice(level, message, problems=None, *, stale=False, note=None):
     return {"level": level, "message": message, "problems": list(problems or []), "stale": stale, "note": note}
 
@@ -101,6 +103,7 @@ def notify(state, level, message, problems=None, **extra):
 
 
 # ------------------------------------------------------------ login session
+
 
 def end_login(state, message):
     """Drop the login and the session-scoped state, keeping a notice. When an
@@ -134,6 +137,7 @@ def check_session(state=None):
 
 
 # ---------------------------------------------------------------- outcomes
+
 
 def _after_write_outcome(state):
     """BR3.3: every tab shows the latest state on the next render."""
@@ -219,6 +223,7 @@ def guarded(action):
 
 # -------------------------------------------------------------- request ids
 
+
 def _fingerprint(body):
     text = json.dumps(body, sort_keys=True, separators=(",", ":"), default=str)
     return hashlib.sha256(text.encode()).hexdigest()
@@ -253,12 +258,16 @@ def _mark(state, control, last):
         # R-14: another control's stored success for the same kind and site
         # is stale now; its next identical submission must be checked afresh.
         ids = session.request_ids(state)
-        for other in [c for c, e in ids.items() if c != control and e["last"] == "ok"
-                      and (e["kind"], e["site"]) == (entry["kind"], entry["site"])]:
+        for other in [
+            c
+            for c, e in ids.items()
+            if c != control and e["last"] == "ok" and (e["kind"], e["site"]) == (entry["kind"], entry["site"])
+        ]:
             del ids[other]
 
 
 # ------------------------------------------------------------------ writes
+
 
 def _login_or_raise(state):
     login = session.login(state)
@@ -331,10 +340,16 @@ def form_values(state, mode, kind, site, record, version, slots=None):
         if fld.input in kind_forms.SLOT_PARTS:
             count = (slots or {}).get(fld.name, kind_forms.slot_count())
             values[fld.name] = [
-                {part.name: state.get(kind_forms.field_key(
-                    mode, kind, site, record, version, kind_forms.slot_field(fld.name, i, part.name)))
-                 for part in kind_forms.SLOT_PARTS[fld.input]}
-                for i in range(count)]
+                {
+                    part.name: state.get(
+                        kind_forms.field_key(
+                            mode, kind, site, record, version, kind_forms.slot_field(fld.name, i, part.name)
+                        )
+                    )
+                    for part in kind_forms.SLOT_PARTS[fld.input]
+                }
+                for i in range(count)
+            ]
         else:
             values[fld.name] = state.get(kind_forms.field_key(mode, kind, site, record, version, fld.name))
     return values
@@ -358,8 +373,12 @@ def submit_add(state, write, kind, site, slots=None, version=None):
     site_arg = _site_arg(kind, site)
     write.update(control=("add", kind, site), kind=kind, site=site, action="add", describe=f"add {kind}")
     client = session.client_for(login["user_id"])
-    _send(state, write, {"action": "add", "kind": kind, "site": site_arg, "record": record},
-          lambda rid: client.add_record(kind, record, login["session_id"], site_id=site_arg, request_id=rid))
+    _send(
+        state,
+        write,
+        {"action": "add", "kind": kind, "site": site_arg, "record": record},
+        lambda rid: client.add_record(kind, record, login["session_id"], site_id=site_arg, request_id=rid),
+    )
 
 
 @guarded
@@ -371,19 +390,36 @@ def submit_edit(state, write, kind, site, record_id, version, slots=None):
         values[form.key] = record_id  # the key cannot be changed
     record = kind_forms.build_record(kind, values)
     site_arg = _site_arg(kind, site)
-    write.update(control=("edit", kind, site, record_id, version), kind=kind, site=site, action="update",
-                 record_id=record_id, describe=f"edit {kind} {record_id}")
+    write.update(
+        control=("edit", kind, site, record_id, version),
+        kind=kind,
+        site=site,
+        action="update",
+        record_id=record_id,
+        describe=f"edit {kind} {record_id}",
+    )
     client = session.client_for(login["user_id"])
-    body = {"action": "update", "kind": kind, "site": site_arg, "record_id": record_id, "version": version,
-            "record": record}
-    _send(state, write, body, lambda rid: client.update_record(
-        kind, record_id, record, version, login["session_id"], site_id=site_arg, request_id=rid))
+    body = {
+        "action": "update",
+        "kind": kind,
+        "site": site_arg,
+        "record_id": record_id,
+        "version": version,
+        "record": record,
+    }
+    _send(
+        state,
+        write,
+        body,
+        lambda rid: client.update_record(
+            kind, record_id, record, version, login["session_id"], site_id=site_arg, request_id=rid
+        ),
+    )
 
 
 def ask_delete(kind, site, record_id, version, state=None):
     """The first Delete click: ask "Delete <record>?" (Q4). No backend call."""
-    session.set_item("pending_delete", {"kind": kind, "site": site, "record_id": record_id, "version": version},
-                     state)
+    session.set_item("pending_delete", {"kind": kind, "site": site, "record_id": record_id, "version": version}, state)
 
 
 def cancel_delete(state=None):
@@ -398,12 +434,24 @@ def confirm_delete(state, write):
         return  # a repeat Confirm after the first one resolved
     kind, site, record_id, version = pending["kind"], pending["site"], pending["record_id"], pending["version"]
     site_arg = _site_arg(kind, site)
-    write.update(control=("delete", kind, site, record_id), kind=kind, site=site, action="delete",
-                 record_id=record_id, describe=f"delete {kind} {record_id}")
+    write.update(
+        control=("delete", kind, site, record_id),
+        kind=kind,
+        site=site,
+        action="delete",
+        record_id=record_id,
+        describe=f"delete {kind} {record_id}",
+    )
     client = session.client_for(login["user_id"])
     body = {"action": "delete", "kind": kind, "site": site_arg, "record_id": record_id, "version": version}
-    _send(state, write, body, lambda rid: client.delete_record(
-        kind, record_id, version, login["session_id"], site_id=site_arg, request_id=rid))
+    _send(
+        state,
+        write,
+        body,
+        lambda rid: client.delete_record(
+            kind, record_id, version, login["session_id"], site_id=site_arg, request_id=rid
+        ),
+    )
 
 
 @guarded
@@ -428,15 +476,16 @@ def upload(state, write, kind, site, uploader_key):
     if not csv_rows.fits(read.rows, file_name, login["session_id"], request_id):
         notify(state, "error", csv_rows.TOO_LARGE)
         return
-    write.update(control=control, kind=kind, site=site, action="bulk", file_name=file_name,
-                 describe=f"upload {file_name}")
+    write.update(
+        control=control, kind=kind, site=site, action="bulk", file_name=file_name, describe=f"upload {file_name}"
+    )
     client = session.client_for(login["user_id"])
-    result = client.bulk_add(kind, read.rows, file_name, login["session_id"], site_id=site_arg,
-                             request_id=request_id)
+    result = client.bulk_add(kind, read.rows, file_name, login["session_id"], site_id=site_arg, request_id=request_id)
     _succeeded(state, write, result)
 
 
 # ---------------------------------------------------------- pending retry
+
 
 def retry_expired(state=None):
     """True when the held write is past its retry deadline. Checked when the
@@ -480,13 +529,15 @@ def reload(state=None):
 
 # ----------------------------------------------------------------- login
 
+
 @guarded
 def log_in(state, write, user_id):
     """Start a session for the picked persona (WF1). Only this action ever
     starts one (NFR7.1); a failure leaves the user logged out."""
     started = session.client_for(user_id).start_session()
-    session.set_login({"session_id": started["session_id"], "user_id": user_id,
-                       "persona": started.get("persona")}, state)
+    session.set_login(
+        {"session_id": started["session_id"], "user_id": user_id, "persona": started.get("persona")}, state
+    )
     session.clear_session_scoped(state)
     session.set_notice(None, state)
     clear_cached_reads(state)
@@ -523,6 +574,7 @@ def log_out(state, write):
 
 # ----------------------------------------------------------------- audit
 
+
 def load_audit(state=None):
     """Load the newest audit page when ``audit`` is empty (WF9 step 1).
     Returns a message to show in the tab when the page is refused or gets no
@@ -539,8 +591,11 @@ def load_audit(state=None):
         return UNREACHABLE
     except HsmApiError as e:
         return AUDIT_UNAVAILABLE if e.status == 503 else e.message
-    session.set_item("audit", {"entries": _shown_entries(page), "next_before": page.get("next_before"),
-                               "total": page.get("total", 0)}, state)
+    session.set_item(
+        "audit",
+        {"entries": _shown_entries(page), "next_before": page.get("next_before"), "total": page.get("total", 0)},
+        state,
+    )
     return None
 
 
@@ -565,8 +620,15 @@ def audit_load_older(state, write):
             notify(state, "error", AUDIT_UNAVAILABLE)
             return
         raise
-    session.set_item("audit", {"entries": loaded["entries"] + _shown_entries(page),
-                               "next_before": page.get("next_before"), "total": page.get("total", 0)}, state)
+    session.set_item(
+        "audit",
+        {
+            "entries": loaded["entries"] + _shown_entries(page),
+            "next_before": page.get("next_before"),
+            "total": page.get("total", 0),
+        },
+        state,
+    )
 
 
 def audit_refresh(state=None):

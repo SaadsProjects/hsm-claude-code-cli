@@ -9,6 +9,7 @@ used to be hand-coded LLM calls here are now just the labor-scheduler
 subagent's own reasoning (see .claude/agents/labor-scheduler.md) -- there
 is deliberately no LLM-calling code left in this file.
 """
+
 from datetime import date
 
 STAFFING_RATIO = {"JC-COOK": 25.0, "JC-SERVER": 25.0, "JC-CASHIER": 50.0}  # covers per labor-hour
@@ -28,6 +29,12 @@ def compute_demand(forecast):
         covers = sum(day_row["items"].values())
         role_hours = {jc: round(covers / ratio, 1) for jc, ratio in STAFFING_RATIO.items()}
         role_hours["JC-LEAD"] = LEAD_HOURS_PER_DAY
-        demand.append({"date": d.isoformat(), "weekday": _weekday_abbr(d), "covers": round(covers, 1),
-                        "role_hours_needed": role_hours})
+        demand.append(
+            {
+                "date": d.isoformat(),
+                "weekday": _weekday_abbr(d),
+                "covers": round(covers, 1),
+                "role_hours_needed": role_hours,
+            }
+        )
     return demand

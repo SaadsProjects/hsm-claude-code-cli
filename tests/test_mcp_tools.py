@@ -9,6 +9,7 @@ Run with either (both start their own mock server on port 8772):
     python3 -m pytest tests/test_mcp_tools.py -v
     python3 tests/test_mcp_tools.py
 """
+
 import asyncio
 import json
 import os
@@ -28,10 +29,12 @@ TEST_PORT = 8772
 
 def _start_mock_server():
     from mock_hsm.server import run as run_server
+
     t = threading.Thread(target=run_server, kwargs={"port": TEST_PORT}, daemon=True)
     t.start()
     from agents.hsm_client import HsmClient
     from mock_hsm.auth import mint_token
+
     for _ in range(40):
         try:
             HsmClient(mint_token("user_regional_atl"), base_url=f"http://127.0.0.1:{TEST_PORT}").get_sites()
@@ -47,8 +50,7 @@ async def _run():
     server_params = StdioServerParameters(
         command=sys.executable,
         args=[str(PROJECT_ROOT / "mcp_server" / "hsm_tools.py")],
-        env={**os.environ, "HSM_BASE_URL": f"http://127.0.0.1:{TEST_PORT}",
-             "HSM_ACTIVE_USER": "user_rm_midtown"},
+        env={**os.environ, "HSM_BASE_URL": f"http://127.0.0.1:{TEST_PORT}", "HSM_ACTIVE_USER": "user_rm_midtown"},
         cwd=str(PROJECT_ROOT),
     )
 
@@ -57,10 +59,19 @@ async def _run():
 
         tools = (await session.list_tools()).tools
         names = {t.name for t in tools}
-        expected = {"get_forecast", "get_employees", "get_labor_rules", "get_vendors",
-                    "get_on_hand", "compute_labor_demand", "validate_schedule",
-                    "compute_usage_anomalies", "compute_reorder_needs",
-                    "publish_schedule", "submit_purchase_order"}
+        expected = {
+            "get_forecast",
+            "get_employees",
+            "get_labor_rules",
+            "get_vendors",
+            "get_on_hand",
+            "compute_labor_demand",
+            "validate_schedule",
+            "compute_usage_anomalies",
+            "compute_reorder_needs",
+            "publish_schedule",
+            "submit_purchase_order",
+        }
         missing = expected - names
         assert not missing, f"missing tools: {missing}"
         print(f"OK: all {len(expected)} expected tools registered")
@@ -76,11 +87,16 @@ async def _run():
         print(f"OK: get_employees returned {len(emp_data['employees'])} employees")
 
         # A deliberately bad shift (23h59m) must trip max_shift_length.
-        bad_shifts = [{"employee_id": emp_data["employees"][0]["employee_id"],
-                       "date": "2026-01-05", "role": emp_data["employees"][0]["job_code"],
-                       "start_time": "00:00", "end_time": "23:59"}]
-        validation = await session.call_tool("validate_schedule",
-                                              {"jurisdiction": "GA", "shifts": bad_shifts})
+        bad_shifts = [
+            {
+                "employee_id": emp_data["employees"][0]["employee_id"],
+                "date": "2026-01-05",
+                "role": emp_data["employees"][0]["job_code"],
+                "start_time": "00:00",
+                "end_time": "23:59",
+            }
+        ]
+        validation = await session.call_tool("validate_schedule", {"jurisdiction": "GA", "shifts": bad_shifts})
         val_data = json.loads(validation.content[0].text)
         assert any(v["rule"] == "max_shift_length" for v in val_data["violations"])
         print("OK: validate_schedule correctly flags an oversized shift")

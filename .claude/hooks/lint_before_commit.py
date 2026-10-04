@@ -45,6 +45,7 @@ so every failure to lint a commit (ruff missing, git error, timeout) is an
 explicit deny instead. Per-step timeouts stay well under the hook timeout
 in .claude/settings.json.
 """
+
 import importlib.util
 import json
 import os
@@ -60,9 +61,29 @@ STEP_TIMEOUT_SECONDS = 20  # up to 5 steps; hook timeout in settings.json is 120
 
 # Git subcommands that never change the index. Any other git call in the same
 # command as a commit is assumed to possibly stage files.
-_READ_ONLY_GIT = {"status", "diff", "log", "show", "rev-parse", "ls-files", "blame",
-                  "grep", "describe", "shortlog", "help", "version", "remote", "fetch",
-                  "push", "config", "branch", "tag", "reflog", "cat-file", "rev-list"}
+_READ_ONLY_GIT = {
+    "status",
+    "diff",
+    "log",
+    "show",
+    "rev-parse",
+    "ls-files",
+    "blame",
+    "grep",
+    "describe",
+    "shortlog",
+    "help",
+    "version",
+    "remote",
+    "fetch",
+    "push",
+    "config",
+    "branch",
+    "tag",
+    "reflog",
+    "cat-file",
+    "rev-list",
+}
 
 # Splits a shell command into simple commands, ignoring quotes. That
 # over-splits quoted text (a message like "fix (x)"), so it's only trusted to
@@ -73,11 +94,34 @@ _SHELL_PUNCTUATION = set("();<>|&$")
 _SHELL_OPTS_WITH_VALUE = {"-o", "+o", "-O", "+O", "--rcfile", "--init-file"}
 _SHELLS = {"sh", "bash", "zsh", "dash", "ksh"}
 
-_GIT_GLOBAL_OPTS_WITH_VALUE = {"-C", "-c", "--git-dir", "--work-tree", "--namespace",
-                               "--exec-path", "--config-env", "--super-prefix"}
-_COMMIT_OPTS_WITH_VALUE = {"-m", "--message", "-F", "--file", "-C", "--reuse-message", "-c",
-                           "--reedit-message", "--author", "--date", "-t", "--template",
-                           "--fixup", "--squash", "--cleanup", "--trailer"}
+_GIT_GLOBAL_OPTS_WITH_VALUE = {
+    "-C",
+    "-c",
+    "--git-dir",
+    "--work-tree",
+    "--namespace",
+    "--exec-path",
+    "--config-env",
+    "--super-prefix",
+}
+_COMMIT_OPTS_WITH_VALUE = {
+    "-m",
+    "--message",
+    "-F",
+    "--file",
+    "-C",
+    "--reuse-message",
+    "-c",
+    "--reedit-message",
+    "--author",
+    "--date",
+    "-t",
+    "--template",
+    "--fixup",
+    "--squash",
+    "--cleanup",
+    "--trailer",
+}
 _COMMIT_SHORT_WITH_VALUE = set("mFCct")
 _COMMIT_WORKTREE_OPTS = {"-a", "--all", "-i", "--include", "-o", "--only", "--pathspec-from-file"}
 _COMMIT_SHORT_WORKTREE = set("aio")
@@ -88,13 +132,17 @@ def pass_through():
 
 
 def deny(reason: str):
-    print(json.dumps({
-        "hookSpecificOutput": {
-            "hookEventName": "PreToolUse",
-            "permissionDecision": "deny",
-            "permissionDecisionReason": reason,
-        }
-    }))
+    print(
+        json.dumps(
+            {
+                "hookSpecificOutput": {
+                    "hookEventName": "PreToolUse",
+                    "permissionDecision": "deny",
+                    "permissionDecisionReason": reason,
+                }
+            }
+        )
+    )
 
 
 def _tokens(segment):
@@ -154,13 +202,13 @@ def _git_calls(command, split, depth=0):
             if depth < 3 and base in _SHELLS:
                 script = _shell_script(toks, i)
             elif depth < 3 and base == "eval":
-                script = " ".join(toks[i + 1:])
+                script = " ".join(toks[i + 1 :])
             elif base == "git":
                 j = i + 1
                 while j < len(toks) and toks[j].startswith("-"):
                     j += 2 if toks[j] in _GIT_GLOBAL_OPTS_WITH_VALUE else 1
                 if j < len(toks):
-                    calls.append((toks[j], toks[j + 1:]))
+                    calls.append((toks[j], toks[j + 1 :]))
             if script is not None:
                 nested = _git_calls(script, split, depth + 1)
                 if nested is None:
@@ -237,8 +285,7 @@ def _ruff_command(repo):
 
 
 def _run(cmd, cwd):
-    return subprocess.run(cmd, cwd=cwd, capture_output=True, text=True,
-                          timeout=STEP_TIMEOUT_SECONDS, check=False)
+    return subprocess.run(cmd, cwd=cwd, capture_output=True, text=True, timeout=STEP_TIMEOUT_SECONDS, check=False)
 
 
 _PYTHON_SUFFIXES = (".py", ".pyi", ".ipynb")
@@ -262,8 +309,10 @@ def _lint(ruff, cwd, label, paths=(".",)):
 def lint_commit(repo, uses_worktree, include_untracked=False):
     ruff = _ruff_command(repo)
     if ruff is None:
-        return ("ruff not found (checked PATH, .venv/bin, and `python -m ruff`) -- "
-                "install it with `pip install -r requirements.txt` so commits can be linted.")
+        return (
+            "ruff not found (checked PATH, .venv/bin, and `python -m ruff`) -- "
+            "install it with `pip install -r requirements.txt` so commits can be linted."
+        )
 
     toplevel = _run(["git", "rev-parse", "--show-toplevel"], repo)
     if toplevel.returncode != 0:
@@ -288,8 +337,7 @@ def _lint_worktree(ruff, repo, include_untracked):
     listed = _run(["git", "ls-files", "-z", "--cached"], repo)
     if listed.returncode != 0:
         return f"could not list tracked files for linting: {listed.stderr.strip()}"
-    paths = sorted({p for p in listed.stdout.split("\0")
-                    if _lintable(p) and os.path.isfile(os.path.join(repo, p))})
+    paths = sorted({p for p in listed.stdout.split("\0") if _lintable(p) and os.path.isfile(os.path.join(repo, p))})
     if not paths:
         return None
     label = "working tree (this commit includes unstaged changes)"
@@ -311,8 +359,9 @@ def main(raw_payload):
 
     command = payload.get("tool_input", {}).get("command", "")
     repo = os.environ.get("CLAUDE_PROJECT_DIR") or payload.get("cwd") or "."
-    failure = lint_commit(repo, any(commit_uses_worktree(args) for args in commits),
-                          include_untracked=stages_in_same_command(command))
+    failure = lint_commit(
+        repo, any(commit_uses_worktree(args) for args in commits), include_untracked=stages_in_same_command(command)
+    )
     return deny(failure) if failure else pass_through()
 
 
