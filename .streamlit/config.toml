@@ -1,0 +1,6 @@
+# Dashboard reach and upload size (dashboard-writes NFR1.3, NFR1.6).
+# Listen on this machine only; see dashboard/README.md to open it up on purpose.
+[server]
+address = "127.0.0.1"
+# Streamlit refuses uploads above 2 MB; the dashboard's own 960 KiB check runs after.
+maxUploadSize = 2

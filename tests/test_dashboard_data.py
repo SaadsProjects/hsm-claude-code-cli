@@ -47,7 +47,8 @@ def fresh_app_cache():
 @pytest.fixture
 def base_url():
     server = ThreadingHTTPServer(("127.0.0.1", 0), Handler)  # ephemeral port
-    threading.Thread(target=server.serve_forever, daemon=True).start()
+    # A short poll keeps shutdown() from waiting the default 0.5 s on every test.
+    threading.Thread(target=server.serve_forever, kwargs={"poll_interval": 0.05}, daemon=True).start()
     yield f"http://127.0.0.1:{server.server_address[1]}"
     server.shutdown()
     server.server_close()
@@ -149,8 +150,15 @@ def _run_app(base_url, monkeypatch, user):
     # HsmClient binds its default base URL at import time; point it at this test's server.
     monkeypatch.setattr(HsmClient.__init__, "__defaults__", (base_url, 15))
     monkeypatch.setenv("HSM_ACTIVE_USER", user)
+    # The dashboard shows its tabs only after a login (unit U4, WF1); every
+    # client it builds comes from session.client_for (NFR6.2).
+    from dashboard import session
+
+    monkeypatch.setattr(session, "client_for", lambda user_id: HsmClient(mint_token(user_id), base_url=base_url))
     app = AppTest.from_file(str(APP_PATH), default_timeout=30)
     app.run()
+    app.selectbox(key="session-persona").set_value(user)
+    app.button(key="session-login").click().run()
     return app
 
 
@@ -161,7 +169,7 @@ def test_app_renders(base_url, monkeypatch, fresh_app_cache, user):
     assert not app.exception, app.exception
     assert not app.error and not app.warning, (app.error, app.warning)
     expected_sites = ["site_001", "site_002", "site_003"] if user == "user_regional_atl" else ["site_001"]
-    assert [label.split("(")[-1].rstrip(")") for label in app.sidebar.selectbox[1].options] == expected_sites
+    assert [label.split("(")[-1].rstrip(")") for label in app.sidebar.selectbox[0].options] == expected_sites
     assert any("Region roll-up" in h.value for h in app.subheader) == (user == "user_regional_atl")
     assert any("no violations" in s.value for s in app.success)
     metrics = {m.label: m.value for m in app.metric}
