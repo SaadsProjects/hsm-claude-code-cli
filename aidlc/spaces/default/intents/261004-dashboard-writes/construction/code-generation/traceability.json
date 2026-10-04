@@ -1,0 +1,55 @@
+{
+  "stage": "code-generation",
+  "upstream_ids": [
+    "R1",
+    "R2",
+    "R3",
+    "R4",
+    "R5",
+    "R6",
+    "R7",
+    "R8"
+  ],
+  "coverage": [
+    {
+      "id": "R1",
+      "status": "OK",
+      "target": "mock_hsm/writes.py"
+    },
+    {
+      "id": "R2",
+      "status": "OK",
+      "target": "tests/test_writes_routes.py"
+    },
+    {
+      "id": "R3",
+      "status": "OK",
+      "target": "mock_hsm/audit.py"
+    },
+    {
+      "id": "R4",
+      "status": "OK",
+      "target": "tests/test_audit_routes.py"
+    },
+    {
+      "id": "R5",
+      "status": "OK",
+      "target": "agents/hsm_client.py"
+    },
+    {
+      "id": "R6",
+      "status": "OK",
+      "target": "tests/test_dashboard_app.py"
+    },
+    {
+      "id": "R7",
+      "status": "OK",
+      "target": "tests/test_hooks.py"
+    },
+    {
+      "id": "R8",
+      "status": "OK",
+      "target": "tests/test_mcp_tools.py"
+    }
+  ]
+}

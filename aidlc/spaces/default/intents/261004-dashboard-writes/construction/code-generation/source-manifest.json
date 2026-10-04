@@ -1,0 +1,94 @@
+{
+  "stage": "code-generation",
+  "unit": null,
+  "version": 1,
+  "writes": [
+    {
+      "path": ".gitignore"
+    },
+    {
+      "path": ".streamlit/config.toml"
+    },
+    {
+      "path": "CLAUDE.md"
+    },
+    {
+      "path": "README.md"
+    },
+    {
+      "path": "agents/hsm_client.py"
+    },
+    {
+      "path": "dashboard/README.md"
+    },
+    {
+      "path": "dashboard/actions.py"
+    },
+    {
+      "path": "dashboard/app.py"
+    },
+    {
+      "path": "dashboard/audit_tab.py"
+    },
+    {
+      "path": "dashboard/csv_rows.py"
+    },
+    {
+      "path": "dashboard/kind_forms.py"
+    },
+    {
+      "path": "dashboard/manage_tab.py"
+    },
+    {
+      "path": "dashboard/safe_text.py"
+    },
+    {
+      "path": "dashboard/session.py"
+    },
+    {
+      "path": "mock_hsm/audit.py"
+    },
+    {
+      "path": "mock_hsm/db.py"
+    },
+    {
+      "path": "mock_hsm/server.py"
+    },
+    {
+      "path": "mock_hsm/writes.py"
+    },
+    {
+      "path": "requirements.txt"
+    },
+    {
+      "path": "tests/conftest.py"
+    },
+    {
+      "path": "tests/test_audit_log.py"
+    },
+    {
+      "path": "tests/test_audit_routes.py"
+    },
+    {
+      "path": "tests/test_dashboard_app.py"
+    },
+    {
+      "path": "tests/test_dashboard_data.py"
+    },
+    {
+      "path": "tests/test_dashboard_units.py"
+    },
+    {
+      "path": "tests/test_hsm_client_writes.py"
+    },
+    {
+      "path": "tests/test_writes_core.py"
+    },
+    {
+      "path": "tests/test_writes_routes.py"
+    },
+    {
+      "path": "tests/test_writes_service.py"
+    }
+  ]
+}
