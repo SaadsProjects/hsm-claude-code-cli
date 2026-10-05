@@ -223,4 +223,7 @@ def test_missing_ruff_denies(repo, monkeypatch):
     repo_dir, _ = repo
     monkeypatch.setattr(hook.shutil, "which", lambda _name: None)
     monkeypatch.setattr(hook.importlib.util, "find_spec", lambda _name: None)
-    assert "ruff not found" in hook.lint_commit(str(repo_dir), uses_worktree=False)
+    message = hook.lint_commit(str(repo_dir), uses_worktree=False)
+    assert "ruff not found" in message
+    # ruff lives in the dev lock; requirements.txt is the hosted-app runtime lock.
+    assert "pip install --require-hashes -r requirements-dev.txt" in message

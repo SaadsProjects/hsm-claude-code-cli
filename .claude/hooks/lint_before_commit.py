@@ -311,7 +311,7 @@ def lint_commit(repo, uses_worktree, include_untracked=False):
     if ruff is None:
         return (
             "ruff not found (checked PATH, .venv/bin, and `python -m ruff`) -- "
-            "install it with `pip install -r requirements.txt` so commits can be linted."
+            "install it with `pip install --require-hashes -r requirements-dev.txt` so commits can be linted."
         )
 
     toplevel = _run(["git", "rev-parse", "--show-toplevel"], repo)

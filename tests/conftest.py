@@ -19,18 +19,31 @@ from mock_hsm import audit, writes
 
 def pytest_configure(config):
     config.addinivalue_line("markers", "perf: timing test against a measurable NFR target")
+    config.addinivalue_line("markers", "browser: needs Playwright and Chromium; run with -m browser")
+
+
+def skip_reason(markexpr, keywords):
+    """Why a test is skipped by default, or None.
+
+    Timing budgets (fsync p95, render times) depend on the machine, so `perf`
+    tests don't run by default; a slow disk or busy CI runner must not fail the
+    suite. Any `-m` expression turns that default off. `browser` tests need
+    Playwright and Chromium, which plain CI doesn't install, so they run only
+    when the `-m` expression names them (`-m browser`).
+    """
+    if "browser" in keywords and "browser" not in (markexpr or ""):
+        return "browser test; run with -m browser"
+    if "perf" in keywords and not markexpr:
+        return "timing test; run with -m perf"
+    return None
 
 
 def pytest_collection_modifyitems(config, items):
-    # Timing budgets (fsync p95, render times) depend on the machine, so they
-    # don't run by default; a slow disk or busy CI runner must not fail the
-    # suite. Run them on purpose with `-m perf`.
-    if config.getoption("markexpr"):
-        return
-    skip = pytest.mark.skip(reason="timing test; run with -m perf")
+    markexpr = config.getoption("markexpr")
     for item in items:
-        if "perf" in item.keywords:
-            item.add_marker(skip)
+        reason = skip_reason(markexpr, item.keywords)
+        if reason:
+            item.add_marker(pytest.mark.skip(reason=reason))
 
 
 @pytest.fixture(scope="session", autouse=True)

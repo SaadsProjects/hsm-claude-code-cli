@@ -1,0 +1,11 @@
+# Findings let through the pip-audit and bandit gates (scripts/check_exceptions.py).
+# Each entry needs an id, the tool ("pip-audit" or "bandit"), a reason, the
+# date it was added, and an expiry date at most 90 days later. Expired or
+# malformed entries fail CI. Bandit ids are "<test id>:<file path>".
+#
+# [[exception]]
+# id = "GHSA-xxxx-xxxx-xxxx"
+# tool = "pip-audit"
+# reason = "No fixed release yet; the vulnerable code path is not used."
+# added = 2026-10-04
+# expires = 2026-12-31

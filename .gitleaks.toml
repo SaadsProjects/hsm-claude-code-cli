@@ -1,0 +1,15 @@
+# gitleaks configuration for CI (ci.yml `secrets` job): the default rules plus
+# one value-scoped allowlist entry.
+title = "hsm-claude-code-cli"
+
+[extend]
+useDefault = true
+
+[allowlist]
+description = """
+The old mock token-signing secret was committed to this public repository and
+is burned: no environment may use it again (scripts/check_burned_secret.py
+refuses it anywhere outside this file and the AI-DLC record tree). It stays in
+git history, so this one exact value is allowlisted. Added 2026-10-04.
+"""
+regexes = ['''demo-shared-secret-not-for-production''']

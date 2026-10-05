@@ -8,7 +8,7 @@ trail. The dashboard never publishes schedules or submits purchase orders.
 ## Start it
 
 ```bash
-pip install -r requirements.txt                       # streamlit>=1.64
+pip install --require-hashes -r requirements-dev.txt   # includes streamlit 1.64
 python3 -m mock_hsm.server &                          # mock backend on 127.0.0.1:8770
 streamlit run dashboard/app.py --server.address 127.0.0.1
 ```

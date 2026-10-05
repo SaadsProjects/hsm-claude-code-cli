@@ -31,12 +31,15 @@ hooks — rather than a bespoke orchestration script. See
 ## Commands
 
 ```bash
-pip install -r requirements.txt          # Python 3.10+; mcp pinned <2 (code uses 1.x FastMCP API)
+pip install --require-hashes -r requirements-dev.txt   # Python 3.10+; dev/test lock (requirements.txt is the hosted-app runtime lock)
 python3 -m mock_hsm.server &             # mock backend on 127.0.0.1:8770 (or scripts/start_mock_server.sh)
 python3 -m pytest tests/ -q              # all tests; they start their own mock servers (:8772, :8773, one ephemeral)
 python3 -m pytest tests/ -q -m perf      # the timing tests, which are skipped by default
+python3 -m pytest tests/ -q -m browser   # Playwright tests, skipped by default (need Chromium)
 python3 -m pytest tests/test_labor_rules.py -k overnight  # a single test
 ruff check .                             # lint (same check the commit hook runs; rules pinned in ruff.toml)
+ruff format --check .                    # formatting, checked in CI
+coverage run -m pytest tests/ -q && coverage combine -q && coverage report   # coverage (.coveragerc; subprocesses measured)
 python3 mcp_server/hsm_tools.py          # run the MCP server standalone over stdio
 mcp dev mcp_server/hsm_tools.py          # MCP Inspector (needs the mcp[cli] extra)
 streamlit run dashboard/app.py           # dashboard with login and data writes (needs the mock backend running)
@@ -178,3 +181,43 @@ edited or staged by a non-git command earlier in it (`sed -i`, a script,
 they actually commit.
 If the reviewer finds something, decide whether to address it before
 committing rather than routing around it.
+
+## Continuous integration
+
+`.github/workflows/ci.yml` runs on every pull request into `main`. Every job
+except `matrix` is meant to be a required check:
+- **Lint:** `lint`, which runs ruff check and ruff format, and `workflow-lint`,
+  which runs actionlint and `scripts/check_workflows.py`.
+- **Secrets:** `secrets` runs gitleaks over full history and
+  `scripts/check_burned_secret.py`.
+- **Dependencies:** `audit` runs pip-audit with `scripts/filter_audit.py`, failing
+  on high or critical findings. `lock-check` verifies the lockfiles match
+  their inputs.
+- **Static analysis:** `sast` runs bandit with `scripts/filter_bandit.py`, failing
+  on high severity.
+- **Tests:** `tests (3.10)` and `tests (3.14)` (plus `vars.HOSTED_PYTHON` when it
+  is set) run with one retry and the `.test-floor` check. `coverage-gate`
+  checks coverage against `.coverage-floor` and the 80% gate.
+- **Browser tests:** `browser-tests` always reports, so it can be required, and
+  passes without running anything unless a browser-check file changed.
+
+The CI gate scripts live in `scripts/`. Their tests are `tests/test_ci_*.py`,
+loaded through `tests/ci_scripts.py`.
+
+**Floors and exceptions:**
+- `.test-floor` and `.coverage-floor` may only rise. A PR that lowers either
+  one fails.
+- Findings that cannot be fixed go in `security-exceptions.toml`. Each entry
+  needs a reason and an expiry date at most 90 days out. This is the only
+  waiver: CI runs bandit with `--ignore-nosec`, so inline `# nosec` comments
+  have no effect.
+
+**Dependencies:**
+- Edit `requirements.in` (hosted-app runtime) or `requirements-dev.in`, never
+  the compiled `.txt` files.
+- Recompile with the `uv pip compile` command at the top of each `.in` file.
+
+**Burned secret:** the old mock signing secret in `mock_hsm/auth.py` is burned.
+`scripts/check_burned_secret.py` excludes that file only temporarily, and the
+check starts failing the moment the literal is removed, which forces the
+exclusion to be removed with it.

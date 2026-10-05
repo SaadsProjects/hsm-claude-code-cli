@@ -1078,7 +1078,10 @@ def test_dashboard_listens_on_this_machine_by_default():
     # NFR1.3: the settings file and the documented start command both bind
     # 127.0.0.1, and the README says how to open it up on purpose. NFR1.6:
     # Streamlit itself refuses uploads over 2 MB.
-    import tomllib
+    try:
+        import tomllib
+    except ModuleNotFoundError:  # Python 3.10
+        import tomli as tomllib
 
     config = tomllib.loads((DASHBOARD.parent / ".streamlit" / "config.toml").read_text())
     assert config["server"]["address"] == "127.0.0.1" and config["server"]["maxUploadSize"] == 2
