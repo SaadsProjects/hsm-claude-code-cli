@@ -23,7 +23,6 @@ from pathlib import Path
 
 from mock_hsm import db
 
-_SECRET = b"demo-shared-secret-not-for-production"
 _TTL_SECONDS = 3600
 
 # The signing secret comes only from the environment (Streamlit secrets when

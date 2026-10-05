@@ -211,3 +211,30 @@ def test_loader_reads_the_default_path_when_none_is_given(monkeypatch, tmp_path)
     monkeypatch.setattr(auth, "default_local_secret_path", lambda: path)
     auth.load_local_secret()
     assert os.environ[SECRET_ENV] == LOADED
+
+
+# ------------------------------------------------- the burned literal is gone
+def test_auth_holds_no_secret_literal_and_no_burned_value():
+    check = load("check_burned_secret")
+    text = (PROJECT_ROOT / "mock_hsm" / "auth.py").read_text()
+    assert "_SECRET =" not in text
+    assert not any(
+        hashlib.sha256(window.encode()).hexdigest() == check.BURNED_SECRET_SHA256 for window in check.candidates(text)
+    )
+
+
+def test_burned_secret_check_has_no_temporary_exclusions():
+    assert load("check_burned_secret").TEMPORARY_EXCLUSIONS == ()
+
+
+def test_burned_secret_check_passes_on_the_repository():
+    proc = subprocess.run(
+        [sys.executable, "scripts/check_burned_secret.py"],
+        cwd=PROJECT_ROOT,
+        capture_output=True,
+        text=True,
+        timeout=60,
+        check=False,
+    )
+    assert proc.returncode == 0, proc.stdout + proc.stderr
+    assert proc.stdout.strip() == "burned secret: ok"

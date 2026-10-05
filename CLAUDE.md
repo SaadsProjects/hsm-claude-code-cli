@@ -231,7 +231,8 @@ loaded through `tests/ci_scripts.py`.
   the compiled `.txt` files.
 - Recompile with the `uv pip compile` command at the top of each `.in` file.
 
-**Burned secret:** the old mock signing secret in `mock_hsm/auth.py` is burned.
-`scripts/check_burned_secret.py` excludes that file only temporarily, and the
-check starts failing the moment the literal is removed, which forces the
-exclusion to be removed with it.
+**Burned secret:** the old mock signing secret, once hard-coded in
+`mock_hsm/auth.py`, is burned and has been removed. `scripts/check_burned_secret.py`
+fails on it in any tracked file outside `.gitleaks.toml` and the AI-DLC record
+tree, and `TEMPORARY_EXCLUSIONS` is empty. `mock_hsm/auth.py` keeps only its
+SHA-256 and refuses it as `HSM_SIGNING_SECRET`.

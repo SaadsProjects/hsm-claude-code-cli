@@ -23,10 +23,11 @@ BURNED_SECRET_LENGTH = 37
 # audit evidence that quote the (already public) value and must not be rewritten.
 PERMANENT_EXCLUSIONS = (".gitleaks.toml", "aidlc/spaces/*/intents/**")
 
-# Temporary: removed by the follow-up change that takes the literal out of the
-# file. Each entry fails the check once its file no longer holds the value, so
-# an exclusion can't outlive the literal.
-TEMPORARY_EXCLUSIONS = ("mock_hsm/auth.py",)
+# Temporary: a file that still holds the value while a change removes it. Each
+# entry fails the check once its file no longer holds the value, so an
+# exclusion can't outlive the literal. Empty since the literal left
+# mock_hsm/auth.py; the signing secret now comes only from the environment.
+TEMPORARY_EXCLUSIONS = ()
 
 _TOKEN_CHARS = re.compile(r"[A-Za-z0-9_-]+")
 _BINARY_SNIFF_BYTES = 8192
