@@ -14,7 +14,7 @@ mcp[cli]==1.30.0
 # ruff is the linter and formatter; .claude/hooks/lint_before_commit.py runs
 # it before every commit and fails closed if it is missing. CI runs the same
 # pinned version.
-ruff==0.16.8
+ruff==0.16.10
 
 pytest==9.1.1
 pytest-rerunfailures  # CI retries a failing test once (--reruns 1)
