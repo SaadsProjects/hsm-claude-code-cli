@@ -190,9 +190,11 @@ jobs:
           PY: ${{ matrix.python }}
           SHA: ${{ github.sha }}
         run: |
-          extra=""
-          [ -f coverage.json ] && extra="--coverage-json coverage.json --coverage-floor .coverage-floor"
-          [ -f junit.xml ] && python scripts/job_summary.py ci --python "$PY" --sha "$SHA" junit.xml $extra >> "$GITHUB_STEP_SUMMARY"
+          extra=()
+          if [ -f coverage.json ]; then extra=(--coverage-json coverage.json --coverage-floor .coverage-floor); fi
+          if [ -f junit.xml ]; then
+            python scripts/job_summary.py ci --python "$PY" --sha "$SHA" junit.xml "${extra[@]}" >> "$GITHUB_STEP_SUMMARY"
+          fi
       - uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
         if: matrix.python == env.GATE_PYTHON
         with:
