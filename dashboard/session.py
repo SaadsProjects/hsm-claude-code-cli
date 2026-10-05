@@ -17,6 +17,7 @@ B): each ``list_records`` answer is stamped with its fetch time from the
 injectable clock ``_now`` and reused for ``RECORDS_TTL``. It is cleared after
 this session's write outcomes, by Refresh data and with the login.
 """
+
 from datetime import datetime, timedelta, timezone
 
 import streamlit as st
@@ -29,13 +30,13 @@ from mock_hsm.auth import mint_token
 # belong to one login session (functional-spec, Session State).
 LOGIN, NOTICE = "login", "notice"
 SCOPED_DEFAULTS = {
-    "added": dict,              # added_key(kind, site) -> [record keys this login added]
+    "added": dict,  # added_key(kind, site) -> [record keys this login added]
     "pending_delete": lambda: None,
     "pending_retry": lambda: None,
-    "audit": dict,              # {entries, next_before, total}, or {} when it must be reloaded
-    "request_ids": dict,        # control -> {id, fingerprint, last, kind, site}
-    "templates": dict,          # (kind, site) -> {columns, csv}
-    "records": dict,            # (user_id, kind, site) -> {fetched, listing}: the Manage data cache
+    "audit": dict,  # {entries, next_before, total}, or {} when it must be reloaded
+    "request_ids": dict,  # control -> {id, fingerprint, last, kind, site}
+    "templates": dict,  # (kind, site) -> {columns, csv}
+    "records": dict,  # (user_id, kind, site) -> {fetched, listing}: the Manage data cache
 }
 RECORDS_TTL = timedelta(seconds=60)
 # Widget keys of the record forms (kind_forms.field_key), cleared with a login.

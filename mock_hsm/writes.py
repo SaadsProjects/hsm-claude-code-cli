@@ -37,6 +37,7 @@ State is in memory and lost on restart. The clock is injectable
 (``set_clock``) and ``reset_for_tests`` returns everything to its seeded
 state.
 """
+
 import copy
 import hashlib
 import json
@@ -52,22 +53,22 @@ from mock_hsm import audit, db
 from mock_hsm.auth import site_allowed
 
 # ------------------------------------------------------------------ constants
-ENTRY_LIMIT = 100                       # BR6.1: accepted adds per kind per session
-IDLE_TIMEOUT = timedelta(minutes=15)    # BR1.2: session idle limit
-REQUEST_TTL = timedelta(minutes=15)     # BR9.1: request records are kept this long
-REQUEST_CAP = 1000                      # NFR1.8: request records kept per user
-BULK_MIN_ROWS = 1                       # BR10.5
-BULK_MAX_ROWS = 500                     # BR10.5
-MAX_DEPTH = 32                          # NFR2.2: nesting limit for a data-write body
-MAX_TEXT = 100                          # BR4.2: text and id length
-MAX_NUMBER = 1_000_000_000              # BR4.3: largest value of any number field, so float math stays finite
-MAX_NUMBER_TEXT = 32                    # BR4.3: longest CSV number cell read before parsing
-MAX_REQUEST_ID = 100                    # BR9.2: request id length
-MAX_BODY_BYTES = 1024 * 1024            # dispatcher: largest body that is read and parsed
-MAX_DRAIN_BYTES = 8 * 1024 * 1024       # dispatcher: largest body drained before a 400
-DRAIN_CHUNK_BYTES = 64 * 1024           # dispatcher: drain chunk size
-MAX_AUDIT_TEXT = 1024                   # clip for every text value of an audit entry (NFR2.7)
-MAX_ENVELOPE_PROBLEMS = 50              # problems listed for one malformed request
+ENTRY_LIMIT = 100  # BR6.1: accepted adds per kind per session
+IDLE_TIMEOUT = timedelta(minutes=15)  # BR1.2: session idle limit
+REQUEST_TTL = timedelta(minutes=15)  # BR9.1: request records are kept this long
+REQUEST_CAP = 1000  # NFR1.8: request records kept per user
+BULK_MIN_ROWS = 1  # BR10.5
+BULK_MAX_ROWS = 500  # BR10.5
+MAX_DEPTH = 32  # NFR2.2: nesting limit for a data-write body
+MAX_TEXT = 100  # BR4.2: text and id length
+MAX_NUMBER = 1_000_000_000  # BR4.3: largest value of any number field, so float math stays finite
+MAX_NUMBER_TEXT = 32  # BR4.3: longest CSV number cell read before parsing
+MAX_REQUEST_ID = 100  # BR9.2: request id length
+MAX_BODY_BYTES = 1024 * 1024  # dispatcher: largest body that is read and parsed
+MAX_DRAIN_BYTES = 8 * 1024 * 1024  # dispatcher: largest body drained before a 400
+DRAIN_CHUNK_BYTES = 64 * 1024  # dispatcher: drain chunk size
+MAX_AUDIT_TEXT = 1024  # clip for every text value of an audit entry (NFR2.7)
+MAX_ENVELOPE_PROBLEMS = 50  # problems listed for one malformed request
 IDLE_TIMEOUT_SECONDS = int(IDLE_TIMEOUT.total_seconds())
 
 SOURCE = "dashboard"
@@ -81,6 +82,7 @@ UNRECORDABLE_CHANGES = {"truncated": True, "unserializable": True}
 
 
 # ---------------------------------------------------------------------- clock
+
 
 def _utc_now():
     return datetime.now(timezone.utc)
@@ -105,6 +107,7 @@ def _iso(ts):
 
 # ------------------------------------------------------------ shared helpers
 
+
 def clip_text(text):
     """Bound a client-influenced string (an error message echoing a huge id,
     say) so an audit entry always fits the audit cap. The result, marker
@@ -113,7 +116,7 @@ def clip_text(text):
     if text is None or len(text) <= MAX_AUDIT_TEXT:
         return text
     marker = "...(truncated)"
-    return text[:MAX_AUDIT_TEXT - len(marker)] + marker
+    return text[: MAX_AUDIT_TEXT - len(marker)] + marker
 
 
 def json_safe(value):
@@ -216,6 +219,7 @@ def _region_wide(claims):
 
 # ================================================================ KindCatalog
 
+
 @dataclass(frozen=True)
 class Field:
     """One attribute of a kind. ``type`` is text, id, ref, number, integer,
@@ -232,12 +236,12 @@ class Kind:
 
     name: str
     label: str
-    scope: str            # "shared" or "site"
-    attr: str             # the db collection holding it
-    key: str              # key field
-    key_mode: str         # "typed" (user types it), "ref" (the referenced record's id) or "generated"
-    shape: str            # "record" (a dict), "lines" (recipe line list) or "qty" (a bare number)
-    fields: tuple         # the fields a request supplies, key first unless generated
+    scope: str  # "shared" or "site"
+    attr: str  # the db collection holding it
+    key: str  # key field
+    key_mode: str  # "typed" (user types it), "ref" (the referenced record's id) or "generated"
+    shape: str  # "record" (a dict), "lines" (recipe line list) or "qty" (a bare number)
+    fields: tuple  # the fields a request supplies, key first unless generated
     csv_columns: tuple
     collection_path: str
     item_path: str
@@ -248,54 +252,184 @@ _LINE_FIELDS = (Field("raw_material_id", "ref", "raw_material"), Field("qty", _N
 _RECIPE_ROW_FIELDS = (Field("menu_item_id", "ref", "menu_item"), *_LINE_FIELDS)
 _STOCK_FIELDS = (Field("raw_material_id", "ref", "raw_material"), Field("qty", _N))
 
-KINDS = {kind.name: kind for kind in (
-    Kind("menu_item", "menu item", "shared", "MENU_ITEMS", "menu_item_id", "typed", "record",
-         (Field("menu_item_id", "id"), Field("name", _T), Field("gl_code", "gl_code")),
-         ("menu_item_id", "name", "gl_code"),
-         "/catalog/menu-items", "/catalog/menu-items/{record_id}"),
-    Kind("recipe", "recipe", "shared", "RECIPES", "menu_item_id", "ref", "lines",
-         (Field("menu_item_id", "ref", "menu_item"), Field("lines", "lines")),
-         ("menu_item_id", "raw_material_id", "qty", "uom"),
-         "/inventory/recipes", "/inventory/recipes/{record_id}"),
-    Kind("raw_material", "raw material", "shared", "RAW_MATERIALS", "raw_material_id", "typed", "record",
-         (Field("raw_material_id", "id"), Field("name", _T), Field("uom", "ref", "uom")),
-         ("raw_material_id", "name", "uom"),
-         "/inventory/raw-materials", "/inventory/raw-materials/{record_id}"),
-    Kind("uom", "unit of measure", "shared", "UOM", "uom_id", "typed", "record",
-         (Field("uom_id", "id"), Field("name", _T), Field("base", "ref", "uom"), Field("factor_to_base", _N)),
-         ("uom_id", "name", "base", "factor_to_base"),
-         "/inventory/uom", "/inventory/uom/{record_id}"),
-    Kind("vendor", "vendor", "shared", "VENDORS", "vendor_id", "typed", "record",
-         (Field("vendor_id", "id"), Field("name", _T), Field("lead_time_days", _I),
-          Field("price_list", "price_list", "raw_material"), Field("min_order_value", _N)),
-         ("vendor_id", "name", "lead_time_days", "price_list", "min_order_value"),
-         "/inventory/vendors", "/inventory/vendors/{record_id}"),
-    Kind("employee", "employee", "site", "EMPLOYEES", "employee_id", "generated", "record",
-         (Field("name", _T), Field("job_code", "ref", "job_code"), Field("hourly_rate", _N),
-          Field("max_weekly_hours_preference", _I), Field("available_days", "days")),
-         ("name", "job_code", "hourly_rate", "max_weekly_hours_preference", "available_days"),
-         "/labor/sites/{site_id}/employees", "/labor/sites/{site_id}/employees/{record_id}"),
-    Kind("job_code", "job code", "shared", "JOB_CODES", "job_code", "typed", "record",
-         (Field("job_code", "id"), Field("title", _T)),
-         ("job_code", "title"),
-         "/sales/job-codes", "/sales/job-codes/{record_id}"),
-    Kind("on_hand", "on-hand count", "site", "ON_HAND", "raw_material_id", "ref", "qty",
-         _STOCK_FIELDS, ("raw_material_id", "qty"),
-         "/inventory/sites/{site_id}/on-hand", "/inventory/sites/{site_id}/on-hand/{record_id}"),
-    Kind("par_level", "par level", "shared", "PAR_LEVELS", "raw_material_id", "ref", "qty",
-         _STOCK_FIELDS, ("raw_material_id", "qty"),
-         "/inventory/par-levels", "/inventory/par-levels/{record_id}"),
-    Kind("reorder_point", "reorder point", "shared", "REORDER_POINTS", "raw_material_id", "ref", "qty",
-         _STOCK_FIELDS, ("raw_material_id", "qty"),
-         "/inventory/reorder-points", "/inventory/reorder-points/{record_id}"),
-    Kind("labor_rule", "labor rule", "shared", "LABOR_RULES_BY_JURISDICTION", "jurisdiction", "typed", "record",
-         (Field("jurisdiction", "id"), Field("weekly_ot_threshold_hours", _N), Field("daily_ot_threshold_hours", _N),
-          Field("ot_multiplier", _N), Field("max_consecutive_days", _I),
-          Field("min_rest_hours_between_shifts", _N), Field("max_shift_length_hours", _N), Field("note", _T)),
-         ("jurisdiction", "weekly_ot_threshold_hours", "daily_ot_threshold_hours", "ot_multiplier",
-          "max_consecutive_days", "min_rest_hours_between_shifts", "max_shift_length_hours", "note"),
-         "/labor/rules", "/labor/rules/{record_id}"),
-)}
+KINDS = {
+    kind.name: kind
+    for kind in (
+        Kind(
+            "menu_item",
+            "menu item",
+            "shared",
+            "MENU_ITEMS",
+            "menu_item_id",
+            "typed",
+            "record",
+            (Field("menu_item_id", "id"), Field("name", _T), Field("gl_code", "gl_code")),
+            ("menu_item_id", "name", "gl_code"),
+            "/catalog/menu-items",
+            "/catalog/menu-items/{record_id}",
+        ),
+        Kind(
+            "recipe",
+            "recipe",
+            "shared",
+            "RECIPES",
+            "menu_item_id",
+            "ref",
+            "lines",
+            (Field("menu_item_id", "ref", "menu_item"), Field("lines", "lines")),
+            ("menu_item_id", "raw_material_id", "qty", "uom"),
+            "/inventory/recipes",
+            "/inventory/recipes/{record_id}",
+        ),
+        Kind(
+            "raw_material",
+            "raw material",
+            "shared",
+            "RAW_MATERIALS",
+            "raw_material_id",
+            "typed",
+            "record",
+            (Field("raw_material_id", "id"), Field("name", _T), Field("uom", "ref", "uom")),
+            ("raw_material_id", "name", "uom"),
+            "/inventory/raw-materials",
+            "/inventory/raw-materials/{record_id}",
+        ),
+        Kind(
+            "uom",
+            "unit of measure",
+            "shared",
+            "UOM",
+            "uom_id",
+            "typed",
+            "record",
+            (Field("uom_id", "id"), Field("name", _T), Field("base", "ref", "uom"), Field("factor_to_base", _N)),
+            ("uom_id", "name", "base", "factor_to_base"),
+            "/inventory/uom",
+            "/inventory/uom/{record_id}",
+        ),
+        Kind(
+            "vendor",
+            "vendor",
+            "shared",
+            "VENDORS",
+            "vendor_id",
+            "typed",
+            "record",
+            (
+                Field("vendor_id", "id"),
+                Field("name", _T),
+                Field("lead_time_days", _I),
+                Field("price_list", "price_list", "raw_material"),
+                Field("min_order_value", _N),
+            ),
+            ("vendor_id", "name", "lead_time_days", "price_list", "min_order_value"),
+            "/inventory/vendors",
+            "/inventory/vendors/{record_id}",
+        ),
+        Kind(
+            "employee",
+            "employee",
+            "site",
+            "EMPLOYEES",
+            "employee_id",
+            "generated",
+            "record",
+            (
+                Field("name", _T),
+                Field("job_code", "ref", "job_code"),
+                Field("hourly_rate", _N),
+                Field("max_weekly_hours_preference", _I),
+                Field("available_days", "days"),
+            ),
+            ("name", "job_code", "hourly_rate", "max_weekly_hours_preference", "available_days"),
+            "/labor/sites/{site_id}/employees",
+            "/labor/sites/{site_id}/employees/{record_id}",
+        ),
+        Kind(
+            "job_code",
+            "job code",
+            "shared",
+            "JOB_CODES",
+            "job_code",
+            "typed",
+            "record",
+            (Field("job_code", "id"), Field("title", _T)),
+            ("job_code", "title"),
+            "/sales/job-codes",
+            "/sales/job-codes/{record_id}",
+        ),
+        Kind(
+            "on_hand",
+            "on-hand count",
+            "site",
+            "ON_HAND",
+            "raw_material_id",
+            "ref",
+            "qty",
+            _STOCK_FIELDS,
+            ("raw_material_id", "qty"),
+            "/inventory/sites/{site_id}/on-hand",
+            "/inventory/sites/{site_id}/on-hand/{record_id}",
+        ),
+        Kind(
+            "par_level",
+            "par level",
+            "shared",
+            "PAR_LEVELS",
+            "raw_material_id",
+            "ref",
+            "qty",
+            _STOCK_FIELDS,
+            ("raw_material_id", "qty"),
+            "/inventory/par-levels",
+            "/inventory/par-levels/{record_id}",
+        ),
+        Kind(
+            "reorder_point",
+            "reorder point",
+            "shared",
+            "REORDER_POINTS",
+            "raw_material_id",
+            "ref",
+            "qty",
+            _STOCK_FIELDS,
+            ("raw_material_id", "qty"),
+            "/inventory/reorder-points",
+            "/inventory/reorder-points/{record_id}",
+        ),
+        Kind(
+            "labor_rule",
+            "labor rule",
+            "shared",
+            "LABOR_RULES_BY_JURISDICTION",
+            "jurisdiction",
+            "typed",
+            "record",
+            (
+                Field("jurisdiction", "id"),
+                Field("weekly_ot_threshold_hours", _N),
+                Field("daily_ot_threshold_hours", _N),
+                Field("ot_multiplier", _N),
+                Field("max_consecutive_days", _I),
+                Field("min_rest_hours_between_shifts", _N),
+                Field("max_shift_length_hours", _N),
+                Field("note", _T),
+            ),
+            (
+                "jurisdiction",
+                "weekly_ot_threshold_hours",
+                "daily_ot_threshold_hours",
+                "ot_multiplier",
+                "max_consecutive_days",
+                "min_rest_hours_between_shifts",
+                "max_shift_length_hours",
+                "note",
+            ),
+            "/labor/rules",
+            "/labor/rules/{record_id}",
+        ),
+    )
+}
 
 
 def template_for(kind):
@@ -306,6 +440,7 @@ def template_for(kind):
 # ================================================================ RecordStore
 # Writers always replace a stored value; they never mutate one in place, so a
 # read that copied a collection under the lock never sees a half change.
+
 
 def _collection(kind, site_id):
     table = getattr(db, kind.attr)
@@ -364,8 +499,12 @@ def build_stored(kind, site_id, key, clean):
         return clean["qty"]
     if kind.name == "employee":
         return {
-            "employee_id": key, "name": clean["name"], "site_id": site_id, "job_code": clean["job_code"],
-            "hourly_rate": clean["hourly_rate"], "jurisdiction": db.SITES[site_id]["jurisdiction"],
+            "employee_id": key,
+            "name": clean["name"],
+            "site_id": site_id,
+            "job_code": clean["job_code"],
+            "hourly_rate": clean["hourly_rate"],
+            "jurisdiction": db.SITES[site_id]["jurisdiction"],
             "max_weekly_hours_preference": clean["max_weekly_hours_preference"],
             "available_days": list(clean["available_days"]),
         }
@@ -390,12 +529,18 @@ def users_of(kind, key):
     """Records that still refer to ``kind``/``key`` (BR3.5), as ``(kind, key)``."""
     users = []
     if kind.name == "raw_material":
-        users += [("recipe", mi) for mi, lines in db.RECIPES.items()
-                  if any(line.get("raw_material_id") == key for line in lines)]
+        users += [
+            ("recipe", mi)
+            for mi, lines in db.RECIPES.items()
+            if any(line.get("raw_material_id") == key for line in lines)
+        ]
         users += [("vendor", vid) for vid, v in db.VENDORS.items() if key in v.get("price_list", {})]
         users += [("on_hand", f"{site_id}/{key}") for site_id, table in db.ON_HAND.items() if key in table]
-        users += [(name, key) for name, table in (("par_level", db.PAR_LEVELS), ("reorder_point", db.REORDER_POINTS))
-                  if key in table]
+        users += [
+            (name, key)
+            for name, table in (("par_level", db.PAR_LEVELS), ("reorder_point", db.REORDER_POINTS))
+            if key in table
+        ]
     elif kind.name == "uom":
         users += [("raw_material", rm) for rm, r in db.RAW_MATERIALS.items() if r.get("uom") == key]
         users += [("recipe", mi) for mi, lines in db.RECIPES.items() if any(line.get("uom") == key for line in lines)]
@@ -409,10 +554,18 @@ def users_of(kind, key):
 
 # ================================================================== MetaStore
 
+
 def _new_meta(origin, created_by, created_at, session_id=None, site_id=None):
-    return {"origin": origin, "created_by": created_by, "created_at": created_at,
-            "updated_by": None, "updated_at": None, "version": 1,
-            "created_session": session_id, "site_id": site_id}
+    return {
+        "origin": origin,
+        "created_by": created_by,
+        "created_at": created_at,
+        "updated_by": None,
+        "updated_at": None,
+        "version": 1,
+        "created_session": session_id,
+        "site_id": site_id,
+    }
 
 
 def wire_meta(meta):
@@ -423,9 +576,12 @@ def wire_meta(meta):
 def _seeded_meta(created_at):
     meta = {}
     for kind in KINDS.values():
-        meta[kind.name] = {(_meta_site(kind, site_id), key): _new_meta("seeded", "system", created_at,
-                                                                       site_id=_meta_site(kind, site_id))
-                           for site_id, key in iter_keys(kind)}
+        meta[kind.name] = {
+            (_meta_site(kind, site_id), key): _new_meta(
+                "seeded", "system", created_at, site_id=_meta_site(kind, site_id)
+            )
+            for site_id, key in iter_keys(kind)
+        }
     return meta
 
 
@@ -436,8 +592,11 @@ def get_meta(kind, site_id, key):
 def meta_map(kind_name, site_id=None):
     """``{record key: Meta}`` for one kind (site kinds: that site only), BR7.2."""
     kind = KINDS[kind_name]
-    return {key: wire_meta(meta) for (meta_site, key), meta in _state["meta"][kind_name].items()
-            if kind.scope == "shared" or meta_site == site_id}
+    return {
+        key: wire_meta(meta)
+        for (meta_site, key), meta in _state["meta"][kind_name].items()
+        if kind.scope == "shared" or meta_site == site_id
+    }
 
 
 def wants_meta(qs):
@@ -656,8 +815,9 @@ def _check_field(fld, name, value, cell):
     elif fld.type in (_N, _I):
         value, problem = _number(value, cell, integer=fld.type == _I)
     elif fld.type == "gl_code":
-        problem = None if isinstance(value, str) and value in db.GL_CODES else (
-            f"must be one of {', '.join(db.GL_CODES)}")
+        problem = (
+            None if isinstance(value, str) and value in db.GL_CODES else (f"must be one of {', '.join(db.GL_CODES)}")
+        )
     elif fld.type == "days":
         return _days(name, value, cell)
     elif fld.type == "price_list":
@@ -742,7 +902,12 @@ def reference_problems(kind, key, clean, *, pending_units=None):
             for i, line in enumerate(value):
                 need(f"{fld.name}[{i}].raw_material_id", "raw_material", line["raw_material_id"])
                 need(f"{fld.name}[{i}].uom", "uom", line["uom"])
-    if kind.name == "uom" and "base" in clean and isinstance(key, str) and _base_loops(key, clean["base"], pending_units):
+    if (
+        kind.name == "uom"
+        and "base" in clean
+        and isinstance(key, str)
+        and _base_loops(key, clean["base"], pending_units)
+    ):
         problems.append(_problem("base", "base units may not loop"))
     return problems
 
@@ -754,8 +919,11 @@ def envelope_problems(body, action):
         return [_problem("body", "must be an object")]
     if depth_exceeds(body):
         return [_problem("body", f"nested deeper than {MAX_DEPTH} levels")]
-    problems = [_problem(name, "must be text") for name in ("session_id", "request_id")
-                if body.get(name) is not None and not isinstance(body[name], str)]
+    problems = [
+        _problem(name, "must be text")
+        for name in ("session_id", "request_id")
+        if body.get(name) is not None and not isinstance(body[name], str)
+    ]
     if action in ("add", "update") and not isinstance(body.get("record"), dict):
         problems.append(_problem("record", "must be an object"))
     if action in ("update", "delete") and not _whole(body.get("version"), 1):
@@ -790,6 +958,7 @@ def _rows_envelope_problems(body):
 
 # ================================================== SessionStore / QuotaStore
 
+
 def _end_session(session_id, reason, now):
     session = _state["sessions"].pop(session_id)
     for kind_name in KINDS:
@@ -816,6 +985,7 @@ def _quota_count(session_id, kind):
 
 
 # ================================================================= RequestLog
+
 
 def _request_log(user_id, now):
     """The user's live request records, oldest first; expired ones dropped."""
@@ -845,8 +1015,12 @@ def remember_request(user_id, request_id, fingerprint, response, now):
     if request_id in log:
         return
     status, payload = response
-    log[request_id] = {"fingerprint": fingerprint, "status": status,
-                       "payload": copy.deepcopy(payload), "stored_at": now}
+    log[request_id] = {
+        "fingerprint": fingerprint,
+        "status": status,
+        "payload": copy.deepcopy(payload),
+        "stored_at": now,
+    }
     while len(log) > REQUEST_CAP:
         log.popitem(last=False)
 
@@ -861,6 +1035,7 @@ def _valid_request_id(request_id):
 
 
 # =============================================================== AuditAdapter
+
 
 class AuditFailure(Exception):
     """The attempt could not be audited; nothing was applied (503)."""
@@ -883,8 +1058,22 @@ def _recorded_session(session_id, issued, caller):
     return session_id if session is not None and caller is not None and session["user_id"] == caller else None
 
 
-def build_entry(*, user_id, persona, session_id, action, outcome, kind=None, record_id=None, site_id=None,
-                changes=None, reason=None, file_row=None, issued_session=False, caller=None):
+def build_entry(
+    *,
+    user_id,
+    persona,
+    session_id,
+    action,
+    outcome,
+    kind=None,
+    record_id=None,
+    site_id=None,
+    changes=None,
+    reason=None,
+    file_row=None,
+    issued_session=False,
+    caller=None,
+):
     """One U1 entry, every field kept within what U2 accepts (BR8.3, NFR2.7).
 
     ``record_id``, ``site_id``, ``kind``, ``reason`` and every text value in
@@ -892,10 +1081,17 @@ def build_entry(*, user_id, persona, session_id, action, outcome, kind=None, rec
     ``user_id``, ``persona`` and ``session_id`` come from the token or a
     backend-issued session and are never clipped."""
     return {
-        "user_id": _bounded(user_id) or audit.UNKNOWN_USER, "persona": _bounded(persona),
-        "session_id": _recorded_session(session_id, issued_session, caller), "source": SOURCE, "action": action,
-        "outcome": outcome, "kind": _clip_optional(kind), "record_id": _clip_optional(record_id),
-        "site_id": _clip_optional(site_id), "changes": clip_value(changes), "reason": clip_text(reason),
+        "user_id": _bounded(user_id) or audit.UNKNOWN_USER,
+        "persona": _bounded(persona),
+        "session_id": _recorded_session(session_id, issued_session, caller),
+        "source": SOURCE,
+        "action": action,
+        "outcome": outcome,
+        "kind": _clip_optional(kind),
+        "record_id": _clip_optional(record_id),
+        "site_id": _clip_optional(site_id),
+        "changes": clip_value(changes),
+        "reason": clip_text(reason),
         "file_row": file_row,
     }
 
@@ -942,6 +1138,7 @@ def _compensate(allowed_entries, error, what, kind_key):
 
 # ============================================================== WriteService
 
+
 @dataclass
 class Refusal:
     """A refused attempt: its status, response and audit reason."""
@@ -949,7 +1146,7 @@ class Refusal:
     status: int
     error: str
     problems: list = field(default_factory=list)
-    store: bool = True      # stored under the request id (BR9.1)
+    store: bool = True  # stored under the request id (BR9.1)
     reason: str | None = None
 
     def payload(self):
@@ -964,8 +1161,9 @@ class Refusal:
 
 
 def _problem_text(problem):
-    label = " ".join(str(part) for part in (
-        f"row {problem['row']}" if "row" in problem else None, problem.get("field")) if part)
+    label = " ".join(
+        str(part) for part in (f"row {problem['row']}" if "row" in problem else None, problem.get("field")) if part
+    )
     return f"{label}: {problem['reason']}" if label else problem["reason"]
 
 
@@ -974,16 +1172,16 @@ class _Attempt:
 
     def __init__(self, kind, action, claims, site_id, path_key, body):
         self.kind = kind
-        self.action = action            # add, update, delete or bulk
+        self.action = action  # add, update, delete or bulk
         self.claims = claims
         self.site_id = site_id
         self.body = body
         self.now = _now()
-        self.key = path_key             # update/delete: from the path; add: set by the checks
+        self.key = path_key  # update/delete: from the path; add: set by the checks
         self.user_id = audit.UNKNOWN_USER
         self.persona = None
         self.session_id = None
-        self.session = None             # set once the session check passes
+        self.session = None  # set once the session check passes
         self.stored = None
         self.meta = None
         self.clean = None
@@ -1028,10 +1226,11 @@ class _Attempt:
         new record's values), without touching the apply path, so building
         the entry can't fail after the checks passed."""
         before = record_view(self.kind, self.site_id, self.key, self.stored)
-        changed = [name for name, value in self.clean.items()
-                   if name != self.kind.key and before.get(name) != value]
-        return {"before": {name: before[name] for name in changed if name in before},
-                "after": {name: copy.deepcopy(self.clean[name]) for name in changed}}
+        changed = [name for name, value in self.clean.items() if name != self.kind.key and before.get(name) != value]
+        return {
+            "before": {name: before[name] for name in changed if name in before},
+            "after": {name: copy.deepcopy(self.clean[name]) for name in changed},
+        }
 
     def changes(self, outcome):
         """``changes`` for this attempt's entry (FD Q8, BR8.3). ``build_entry``
@@ -1041,8 +1240,10 @@ class _Attempt:
         if self.action == "bulk":
             # The single entry for a whole file (malformed or wrong row count).
             rows = self.body.get("rows")
-            changes = {"file_name": self.body.get("file_name"),
-                       "row_count": len(rows) if isinstance(rows, list) else None}
+            changes = {
+                "file_name": self.body.get("file_name"),
+                "row_count": len(rows) if isinstance(rows, list) else None,
+            }
         elif outcome == "allowed" and self.action == "update":
             changes = self._update_diff()
         elif outcome == "allowed" and self.action == "delete":
@@ -1056,16 +1257,25 @@ class _Attempt:
         return changes
 
     def entry(self, outcome, reason=None, **overrides):
-        fields = {"user_id": self.user_id, "persona": self.persona, "session_id": self.session_id,
-                  "action": self.audit_action, "outcome": outcome, "kind": self.kind.name,
-                  "record_id": self.record_key(), "site_id": _known_site(self.site_id), "reason": reason,
-                  "caller": self.claims.get("sub")}
+        fields = {
+            "user_id": self.user_id,
+            "persona": self.persona,
+            "session_id": self.session_id,
+            "action": self.audit_action,
+            "outcome": outcome,
+            "kind": self.kind.name,
+            "record_id": self.record_key(),
+            "site_id": _known_site(self.site_id),
+            "reason": reason,
+            "caller": self.claims.get("sub"),
+        }
         if "changes" not in overrides:
             fields["changes"] = self.changes(outcome)
         return build_entry(**{**fields, **overrides})
 
 
 # --------------------------------------------------------------- the checks
+
 
 def _replayed(attempt):
     """BR9.1: the stored response for the same request from the same user."""
@@ -1132,8 +1342,9 @@ def _check_policy(attempt):
     """BR3.1 seeded records are read-only; BR3.3 delete ownership."""
     if attempt.meta is None or attempt.meta["origin"] == "seeded":
         return Refusal(403, "seeded records are read-only")
-    if attempt.action == "delete" and (attempt.meta["created_by"] != attempt.claims["sub"]
-                                       or attempt.meta["created_session"] != attempt.session_id):
+    if attempt.action == "delete" and (
+        attempt.meta["created_by"] != attempt.claims["sub"] or attempt.meta["created_session"] != attempt.session_id
+    ):
         return Refusal(403, "not your record from this session")
     return None
 
@@ -1162,9 +1373,14 @@ def _check_version(attempt):
 def _check_in_use(attempt):
     users = users_of(attempt.kind, attempt.key)
     if users:
-        return Refusal(409, "record is still in use",
-                       [_problem(user_kind, f"still used by {KINDS[user_kind].label} {user_key}")
-                        for user_kind, user_key in users])
+        return Refusal(
+            409,
+            "record is still in use",
+            [
+                _problem(user_kind, f"still used by {KINDS[user_kind].label} {user_key}")
+                for user_kind, user_key in users
+            ],
+        )
     return None
 
 
@@ -1209,10 +1425,14 @@ def _first_refusal(attempt, steps):
 
 # ---------------------------------------------------------- finishing steps
 
+
 def _malformed(attempt, problems):
     """BR4.7: 400 "malformed request" with one audit entry; never stored."""
-    entry = attempt.entry("violation", Refusal(400, "malformed request", problems).audit_reason(),
-                          session_id=attempt.body.get("session_id") if isinstance(attempt.body, dict) else None)
+    entry = attempt.entry(
+        "violation",
+        Refusal(400, "malformed request", problems).audit_reason(),
+        session_id=attempt.body.get("session_id") if isinstance(attempt.body, dict) else None,
+    )
     try:
         record_audit([entry], attempt.what(), batch=attempt.action == "bulk")
     except AuditFailure as e:
@@ -1254,8 +1474,12 @@ def _apply_single(attempt):
         count = _quota_count(attempt.session_id, kind) + 1
         status = 201
     else:
-        meta = {**attempt.meta, "updated_by": user, "updated_at": _iso(attempt.now),
-                "version": attempt.meta["version"] + 1}
+        meta = {
+            **attempt.meta,
+            "updated_by": user,
+            "updated_at": _iso(attempt.now),
+            "version": attempt.meta["version"] + 1,
+        }
         count = None
         status = 200
     response = (status, {"record": record_view(kind, site_id, key, stored), "meta": wire_meta(meta)})
@@ -1305,6 +1529,7 @@ def write(kind_name, action, claims, site_id, record_id, body):
 
 
 # ----------------------------------------------------------------------- bulk
+
 
 @dataclass
 class _Item:
@@ -1404,8 +1629,7 @@ def _refuse_rows(attempt, refusal, reasons=None):
     """A refused file: one violation per row (BR10.2, FD Q5)."""
     reasons = reasons or {}
     default = refusal.audit_reason()
-    entries = [_row_entry(attempt, row, "violation", reasons.get(row["row"], default))
-               for row in attempt.body["rows"]]
+    entries = [_row_entry(attempt, row, "violation", reasons.get(row["row"], default)) for row in attempt.body["rows"]]
     return _refuse(attempt, refusal, entries)
 
 
@@ -1418,8 +1642,9 @@ def _apply_bulk(attempt, items):
     records = []
     for item in items:
         stored = build_stored(kind, site_id, item.key, item.clean)
-        meta = _new_meta("dashboard", attempt.claims["sub"], _iso(attempt.now), attempt.session_id,
-                         _meta_site(kind, site_id))
+        meta = _new_meta(
+            "dashboard", attempt.claims["sub"], _iso(attempt.now), attempt.session_id, _meta_site(kind, site_id)
+        )
         records.append({"record": record_view(kind, site_id, item.key, stored), "meta": wire_meta(meta)})
         table[item.key] = stored
         kind_meta[(_meta_site(kind, site_id), item.key)] = meta
@@ -1465,8 +1690,9 @@ def bulk(kind_name, claims, site_id, body):
         rows = body["rows"]
         if not BULK_MIN_ROWS <= len(rows) <= BULK_MAX_ROWS:
             # One entry for the file: its rows are never examined (BR10.5).
-            return _refuse(attempt, Refusal(400, "file must hold 1 to 500 rows",
-                                            [_problem(None, "file must hold 1 to 500 rows")]))
+            return _refuse(
+                attempt, Refusal(400, "file must hold 1 to 500 rows", [_problem(None, "file must hold 1 to 500 rows")])
+            )
         refusal = _first_refusal(attempt, [_check_session, _check_request_id, _check_site_and_rights, _check_rights])
         if refusal is not None:
             refusal.problems = refusal.problems or [_problem(None, refusal.error)]
@@ -1482,12 +1708,15 @@ def _bulk_rows(attempt, rows):
             problems, items = _check_plain_rows(attempt, rows)
     except Exception as e:  # noqa: BLE001 -- turned into an audited 500 refusal
         _log_error(f"check failed for {attempt.what()} ({type(e).__name__})")
-        return _refuse_rows(attempt, Refusal(500, "internal error", store=False,
-                                             reason=f"internal error: {type(e).__name__}"))
+        return _refuse_rows(
+            attempt, Refusal(500, "internal error", store=False, reason=f"internal error: {type(e).__name__}")
+        )
     if problems:
         listed = [p for number in sorted(problems) for p in problems[number]]
-        reasons = {number: "; ".join(_problem_text({k: v for k, v in p.items() if k != "row"}) for p in found)
-                   for number, found in problems.items()}
+        reasons = {
+            number: "; ".join(_problem_text({k: v for k, v in p.items() if k != "row"}) for p in found)
+            for number, found in problems.items()
+        }
         default = "not saved: other rows in the file failed"
         reasons = {row["row"]: reasons.get(row["row"], default) for row in rows}
         return _refuse_rows(attempt, Refusal(400, "invalid rows", listed), reasons)
@@ -1500,6 +1729,7 @@ def _bulk_rows(attempt, rows):
 
 # ------------------------------------------------------------------- sessions
 
+
 def start_session(claims):
     """WF1: audit the login (with the new id) first, then activate."""
     with db._lock:
@@ -1508,16 +1738,30 @@ def start_session(claims):
         session_id = secrets.token_urlsafe(32)
         while session_id in _state["sessions"] or session_id in _state["ended"]:
             session_id = secrets.token_urlsafe(32)
-        entry = build_entry(user_id=claims["sub"], persona=claims.get("persona"), session_id=session_id,
-                            action="login", outcome="allowed", issued_session=True)
+        entry = build_entry(
+            user_id=claims["sub"],
+            persona=claims.get("persona"),
+            session_id=session_id,
+            action="login",
+            outcome="allowed",
+            issued_session=True,
+        )
         try:
             record_audit([entry], "login session/none")
         except AuditFailure as e:
             return 503, {"error": e.message}
-        _state["sessions"][session_id] = {"user_id": claims["sub"], "persona": claims.get("persona"),
-                                          "started_at": now, "last_activity_at": now}
-        return 201, {"session_id": session_id, "user_id": claims["sub"], "persona": claims.get("persona"),
-                     "idle_timeout_seconds": IDLE_TIMEOUT_SECONDS}
+        _state["sessions"][session_id] = {
+            "user_id": claims["sub"],
+            "persona": claims.get("persona"),
+            "started_at": now,
+            "last_activity_at": now,
+        }
+        return 201, {
+            "session_id": session_id,
+            "user_id": claims["sub"],
+            "persona": claims.get("persona"),
+            "idle_timeout_seconds": IDLE_TIMEOUT_SECONDS,
+        }
 
 
 def end_session(claims, session_id):
@@ -1531,8 +1775,14 @@ def end_session(claims, session_id):
         if session["user_id"] != claims["sub"]:
             return 403, {"error": "not your session"}
         _end_session(session_id, "logout", now)
-        entry = build_entry(user_id=claims["sub"], persona=claims.get("persona"), session_id=session_id,
-                            action="logout", outcome="allowed", issued_session=True)
+        entry = build_entry(
+            user_id=claims["sub"],
+            persona=claims.get("persona"),
+            session_id=session_id,
+            action="logout",
+            outcome="allowed",
+            issued_session=True,
+        )
         try:
             record_audit([entry], "logout session/none")
         except AuditFailure:
@@ -1571,6 +1821,7 @@ def template(kind_name, claims, site_id=None):
 
 # ============================================================= state + reset
 
+
 def _snapshot_seeded_keys():
     keys = {}
     for kind in KINDS.values():
@@ -1586,12 +1837,12 @@ _started_at = _iso(_utc_now())
 with db._lock:
     _state = {
         "seeded_keys": _snapshot_seeded_keys(),
-        "meta": _seeded_meta(_started_at),     # kind -> {(site or None, key): meta}
-        "sessions": {},                        # session_id -> session
-        "ended": {},                           # session_id -> {user_id, reason, ended_at}
-        "quota": {},                           # (session_id, kind) -> accepted adds
-        "requests": {},                        # user_id -> OrderedDict(request_id -> record)
-        "id_counters": _seed_id_counters(),    # site_id -> last employee d-number
+        "meta": _seeded_meta(_started_at),  # kind -> {(site or None, key): meta}
+        "sessions": {},  # session_id -> session
+        "ended": {},  # session_id -> {user_id, reason, ended_at}
+        "quota": {},  # (session_id, kind) -> accepted adds
+        "requests": {},  # user_id -> OrderedDict(request_id -> record)
+        "id_counters": _seed_id_counters(),  # site_id -> last employee d-number
     }
 
 

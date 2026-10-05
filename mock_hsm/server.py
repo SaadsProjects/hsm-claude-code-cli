@@ -21,6 +21,7 @@ mock_hsm/writes.py; the routes here stay thin. Reads of writable data copy
 what they return under db._lock (ReadGuard) and add record metadata when
 asked with ``?with=meta``.
 """
+
 import copy
 import json
 import re
@@ -124,9 +125,16 @@ def _audit_gated(claims, action, outcome, *, kind, record_id, site_id, changes, 
     If the attempted values can't be stored, the entry is still written with a
     marker in their place, so every attempt is audited with its usual response."""
     entry = {
-        "user_id": claims["sub"], "persona": claims["persona"], "session_id": None,
-        "source": _GATED_SOURCE, "action": action, "outcome": outcome,
-        "kind": kind, "record_id": _clip(record_id), "site_id": site_id, "reason": _clip(reason),
+        "user_id": claims["sub"],
+        "persona": claims["persona"],
+        "session_id": None,
+        "source": _GATED_SOURCE,
+        "action": action,
+        "outcome": outcome,
+        "kind": kind,
+        "record_id": _clip(record_id),
+        "site_id": site_id,
+        "reason": _clip(reason),
     }
     try:
         try:
@@ -145,8 +153,11 @@ def _audit_failed_after_audit(claims, action, error, **fields):
     try:
         _audit_gated(claims, action, "violation", reason=f"failed after audit: {_refusal_reason(error)}", **fields)
     except (ApiError, RecursionError, OSError, ValueError):
-        print(f"[mock-hsm] ERROR audit: compensating entry failed for {action} {fields['record_id']}",
-              file=sys.stderr, flush=True)
+        print(
+            f"[mock-hsm] ERROR audit: compensating entry failed for {action} {fields['record_id']}",
+            file=sys.stderr,
+            flush=True,
+        )
 
 
 # --------------------------------------------------------------- ReadGuard
@@ -155,6 +166,7 @@ def _audit_failed_after_audit(claims, action, error, **fields):
 # fully or not at all, and never fails because a write changed a collection
 # under it (BR8.5). JSON encoding happens after the lock is released.
 # Payloads are unchanged; ``?with=meta`` adds one ``meta`` field (BR7.2).
+
 
 def _with_meta(payload, qs, *kinds, site_id=None):
     """Add ``meta: {kind: {record key: Meta}}`` when asked. Call under db._lock."""
@@ -259,6 +271,7 @@ def inventory_recipe(m, claims, qs, body):
             raise ApiError(404, f"no recipe for {mi}")
         return 200, {"menu_item_id": mi, "lines": copy.deepcopy(db.RECIPES[mi])}
 
+
 @route("GET", "/inventory/vendors")
 def inventory_vendors(m, claims, qs, body):
     with db._lock:
@@ -308,8 +321,12 @@ def inventory_create_po(m, claims, qs, body):
     audit_fields = {
         "kind": "purchase_order",
         "site_id": _known_site(fields.get("site_id")),
-        "changes": {"vendor_id": fields.get("vendor_id"), "site_id": fields.get("site_id"),
-                    "region_id": fields.get("region_id"), "line_items": fields.get("line_items", [])},
+        "changes": {
+            "vendor_id": fields.get("vendor_id"),
+            "site_id": fields.get("site_id"),
+            "region_id": fields.get("region_id"),
+            "line_items": fields.get("line_items", []),
+        },
     }
     with db._lock:
         try:
@@ -330,8 +347,9 @@ def inventory_create_po(m, claims, qs, body):
             if vendor_id not in db.VENDORS:
                 raise ApiError(400, f"unknown vendor {vendor_id}")
         except Exception as e:  # audited as a violation, then re-raised unchanged
-            _audit_gated(claims, "submit_purchase_order", "violation", record_id=None,
-                         reason=_refusal_reason(e), **audit_fields)
+            _audit_gated(
+                claims, "submit_purchase_order", "violation", record_id=None, reason=_refusal_reason(e), **audit_fields
+            )
             raise
         po_id = db.next_po_id()  # allocated first so the allowed entry records it (BR3.2)
         _audit_gated(claims, "submit_purchase_order", "allowed", record_id=po_id, **audit_fields)
@@ -369,9 +387,11 @@ def inventory_list_pos(m, claims, qs, body):
             return site_allowed(claims, po["site_id"])
         return region_allowed(claims, po["region_id"])
 
-    pos = [po for po in pos if visible(po)
-           and (not site_id or po["site_id"] == site_id)
-           and (not region_id or po["region_id"] == region_id)]
+    pos = [
+        po
+        for po in pos
+        if visible(po) and (not site_id or po["site_id"] == site_id) and (not region_id or po["region_id"] == region_id)
+    ]
     return 200, {"purchase_orders": pos}
 
 
@@ -392,8 +412,10 @@ def labor_rules(m, claims, qs, body):
     jurisdiction = qs.get("jurisdiction", [None])[0]
     with db._lock:
         if jurisdiction is None and writes.wants_meta(qs):
-            return 200, {"rules": copy.deepcopy(db.LABOR_RULES_BY_JURISDICTION),
-                         "meta": {"labor_rule": writes.meta_map("labor_rule")}}
+            return 200, {
+                "rules": copy.deepcopy(db.LABOR_RULES_BY_JURISDICTION),
+                "meta": {"labor_rule": writes.meta_map("labor_rule")},
+            }
         rules = db.LABOR_RULES_BY_JURISDICTION.get(jurisdiction)
         if not rules:
             raise ApiError(404, f"no rules for jurisdiction {jurisdiction}")
@@ -456,21 +478,23 @@ def labor_rules_validate(m, claims, qs, body):
 
         weekly_hours = sum(_hours(start, end) for start, end, _ in spans)
         if weekly_hours > rules["weekly_ot_threshold_hours"]:
-            violate("weekly_overtime",
-                    f"{weekly_hours:.1f}h scheduled vs {rules['weekly_ot_threshold_hours']}h threshold")
+            violate(
+                "weekly_overtime", f"{weekly_hours:.1f}h scheduled vs {rules['weekly_ot_threshold_hours']}h threshold"
+            )
 
         daily_hours = {}
         for start, end, s in spans:
             h = _hours(start, end)
             daily_hours[s["date"]] = daily_hours.get(s["date"], 0.0) + h
             if h > rules["max_shift_length_hours"]:
-                violate("max_shift_length",
-                        f"{s['date']} shift is {h:.1f}h vs {rules['max_shift_length_hours']}h max")
+                violate("max_shift_length", f"{s['date']} shift is {h:.1f}h vs {rules['max_shift_length_hours']}h max")
         for day, h in sorted(daily_hours.items()):
             shifts_that_day = sum(1 for _, _, s in spans if s["date"] == day)
             if shifts_that_day > 1 and h > rules["max_shift_length_hours"]:
-                violate("max_daily_hours",
-                        f"{day}: {h:.1f}h across {shifts_that_day} shifts vs {rules['max_shift_length_hours']}h max")
+                violate(
+                    "max_daily_hours",
+                    f"{day}: {h:.1f}h across {shifts_that_day} shifts vs {rules['max_shift_length_hours']}h max",
+                )
 
         dates = sorted(daily_hours)
         consecutive = 1
@@ -478,21 +502,27 @@ def labor_rules_validate(m, claims, qs, body):
             if (date.fromisoformat(dates[i]) - date.fromisoformat(dates[i - 1])).days == 1:
                 consecutive += 1
                 if consecutive > rules["max_consecutive_days"]:
-                    violate("max_consecutive_days",
-                            f"{consecutive} consecutive days scheduled vs {rules['max_consecutive_days']} max")
+                    violate(
+                        "max_consecutive_days",
+                        f"{consecutive} consecutive days scheduled vs {rules['max_consecutive_days']} max",
+                    )
             else:
                 consecutive = 1
 
         for (_, prev_end, prev), (curr_start, _, curr) in pairwise(spans):
             gap_hours = _hours(prev_end, curr_start)
             if gap_hours < 0:
-                violate("overlapping_shifts",
-                        f"{curr['date']} {curr['start_time']} shift starts before the "
-                        f"{prev['date']} {prev['start_time']} shift ends")
+                violate(
+                    "overlapping_shifts",
+                    f"{curr['date']} {curr['start_time']} shift starts before the "
+                    f"{prev['date']} {prev['start_time']} shift ends",
+                )
             elif prev["date"] != curr["date"] and gap_hours < rules["min_rest_hours_between_shifts"]:
-                violate("min_rest_between_shifts",
-                        f"only {gap_hours:.1f}h rest before {curr['date']} shift vs "
-                        f"{rules['min_rest_hours_between_shifts']}h min")
+                violate(
+                    "min_rest_between_shifts",
+                    f"only {gap_hours:.1f}h rest before {curr['date']} shift vs "
+                    f"{rules['min_rest_hours_between_shifts']}h min",
+                )
 
     return 200, {"violations": violations, "rules": rules}
 
@@ -502,7 +532,9 @@ def labor_publish_schedule(m, claims, qs, body):
     site_id = m["site_id"]
     attempted = body.get("shifts", []) if isinstance(body, dict) else None
     audit_fields = {
-        "kind": "schedule", "record_id": site_id, "site_id": _known_site(site_id),
+        "kind": "schedule",
+        "record_id": site_id,
+        "site_id": _known_site(site_id),
         "changes": {"shift_count": len(attempted) if isinstance(attempted, list) else None, "shifts": attempted},
     }
     with db._lock:
@@ -541,8 +573,12 @@ def audit_view(m, claims, qs, body):
     parameter can widen what it sees (NFR4.3). Read-only: there is no other
     method on this path (NFR3.10). Any well-formed ``before`` is accepted,
     even one whose entry was purged; a malformed one is a 400 (BR4.3)."""
-    viewer = {"user_id": claims["sub"], "persona": claims["persona"],
-              "site_ids": claims.get("site_ids") or [], "region_id": claims.get("region_id")}
+    viewer = {
+        "user_id": claims["sub"],
+        "persona": claims["persona"],
+        "site_ids": claims.get("site_ids") or [],
+        "region_id": claims.get("region_id"),
+    }
     try:
         return 200, audit.page(viewer, qs.get("before", [None])[0])
     except audit.InvalidPageRequest as e:
@@ -555,6 +591,7 @@ def audit_view(m, claims, qs, body):
 # C1 sessions and C2 writes. The rules (check order, audit, apply, request-id
 # replay) live in mock_hsm/writes.py; every handler returns its
 # (status, payload) as is, refusals included ({error, problems}).
+
 
 @route("POST", "/sessions")
 def sessions_start(m, claims, qs, body):
@@ -678,7 +715,7 @@ class Handler(BaseHTTPRequestHandler):
             if not auth_header.startswith("Bearer "):
                 return self._send(401, {"error": "missing bearer token"})
             try:
-                claims = verify_token(auth_header[len("Bearer "):])
+                claims = verify_token(auth_header[len("Bearer ") :])
             except TokenError as e:
                 return self._send(401, {"error": f"invalid token: {e}"})
 

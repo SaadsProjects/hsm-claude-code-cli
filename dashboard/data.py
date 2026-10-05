@@ -10,6 +10,7 @@ POST it makes is the side-effect-free /labor/rules/validate.
 
 Kept free of Streamlit so it can be tested directly.
 """
+
 from datetime import datetime, timedelta
 
 import pandas as pd
@@ -47,23 +48,31 @@ def on_hand_frame(on_hand_data, raw_materials):
     for rm_id in sorted(set(on_hand) | set(par) | set(rop)):
         rm = names.get(rm_id, {})
         qty = on_hand.get(rm_id, 0.0)
-        rows.append({
-            "raw_material_id": rm_id, "name": rm.get("name", rm_id), "uom": rm.get("uom", ""),
-            "on_hand": qty, "reorder_point": rop.get(rm_id, 0), "par": par.get(rm_id, 0),
-            "below_reorder_point": qty <= rop.get(rm_id, 0),
-        })
+        rows.append(
+            {
+                "raw_material_id": rm_id,
+                "name": rm.get("name", rm_id),
+                "uom": rm.get("uom", ""),
+                "on_hand": qty,
+                "reorder_point": rop.get(rm_id, 0),
+                "par": par.get(rm_id, 0),
+                "below_reorder_point": qty <= rop.get(rm_id, 0),
+            }
+        )
     return pd.DataFrame(rows)
 
 
 def sales_vs_forecast(client: HsmClient, site_id, days=7):
     """Total units per day over the past `days`: actual POS sales vs what was forecast."""
+
     def totals(rows):
         return {row["date"]: round(sum(row["items"].values()), 1) for row in rows}
 
     actual = totals(client.get_actual_sales(site_id, start_offset_days=-days, days=days))
     forecast = totals(client.get_forecast(site_id, start_offset_days=-days, days=days))
-    return pd.DataFrame([{"date": d, "actual": actual.get(d), "forecast": forecast.get(d)}
-                         for d in sorted(set(actual) | set(forecast))])
+    return pd.DataFrame(
+        [{"date": d, "actual": actual.get(d), "forecast": forecast.get(d)} for d in sorted(set(actual) | set(forecast))]
+    )
 
 
 def shift_hours(start_time, end_time):
@@ -99,16 +108,25 @@ def schedule_frame(shifts, employees):
         except (TypeError, ValueError):
             hours = None  # missing or not HH:MM -- the validator reports it; show the shift without hours
         rate = emp.get("hourly_rate")
-        rows.append({
-            "date": s.get("date"), "employee_id": s.get("employee_id"), "name": emp.get("name", "?"),
-            "role": s.get("role") or emp.get("job_code"), "start_time": s.get("start_time"),
-            "end_time": s.get("end_time"),
-            "hours": hours, "est_cost": round(hours * rate, 2) if hours is not None and rate is not None else None,
-        })
+        rows.append(
+            {
+                "date": s.get("date"),
+                "employee_id": s.get("employee_id"),
+                "name": emp.get("name", "?"),
+                "role": s.get("role") or emp.get("job_code"),
+                "start_time": s.get("start_time"),
+                "end_time": s.get("end_time"),
+                "hours": hours,
+                "est_cost": round(hours * rate, 2) if hours is not None and rate is not None else None,
+            }
+        )
     columns = ["date", "employee_id", "name", "role", "start_time", "end_time", "hours", "est_cost"]
     # Numeric even when every value is unknown (NaN, not None), so totals over them can't raise.
-    return (pd.DataFrame(rows, columns=columns).astype({"hours": float, "est_cost": float})
-            .sort_values(["date", "start_time", "employee_id"], ignore_index=True))
+    return (
+        pd.DataFrame(rows, columns=columns)
+        .astype({"hours": float, "est_cost": float})
+        .sort_values(["date", "start_time", "employee_id"], ignore_index=True)
+    )
 
 
 def region_rollup(client: HsmClient, sites):
@@ -117,11 +135,16 @@ def region_rollup(client: HsmClient, sites):
     for site in sites:
         anomalies = usage_anomalies(client, site["site_id"])
         needs = reorder_needs(client, site["site_id"])
-        rows.append({
-            "site_id": site["site_id"], "site": site["name"],
-            "usage_anomalies": len(anomalies),
-            "anomaly_cost_impact": round(sum(a["cost_impact"] for a in anomalies), 2),
-            "items_to_reorder": len(needs),
-            "suggested_order_value": round(sum(n["suggested_order_qty"] * (n["unit_price"] or 0) for n in needs), 2),
-        })
+        rows.append(
+            {
+                "site_id": site["site_id"],
+                "site": site["name"],
+                "usage_anomalies": len(anomalies),
+                "anomaly_cost_impact": round(sum(a["cost_impact"] for a in anomalies), 2),
+                "items_to_reorder": len(needs),
+                "suggested_order_value": round(
+                    sum(n["suggested_order_qty"] * (n["unit_price"] or 0) for n in needs), 2
+                ),
+            }
+        )
     return pd.DataFrame(rows)

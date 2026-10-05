@@ -11,6 +11,7 @@ The fields mirror ``mock_hsm.writes.KINDS``; tests/test_dashboard_units.py
 fails on drift. Nothing here imports mock_hsm or Streamlit: the backend
 decides every rule, and these definitions only shape the forms.
 """
+
 import json
 from dataclasses import dataclass
 
@@ -31,7 +32,15 @@ EXTRA_SLOTS = 3
 # record of ``ref``), gl_code, days, lines (recipe line slots) and
 # price_list (raw material and price slots).
 TEXT, NUMBER, WHOLE, REF, GL_CODE, DAYS_INPUT, LINES, PRICE_LIST = (
-    "text", "number", "whole", "ref", "gl_code", "days", "lines", "price_list")
+    "text",
+    "number",
+    "whole",
+    "ref",
+    "gl_code",
+    "days",
+    "lines",
+    "price_list",
+)
 
 
 @dataclass(frozen=True)
@@ -61,10 +70,10 @@ class KindForm:
     name: str
     label: str
     data_set: str
-    scope: str          # "shared" or "site"
-    key: str            # the record's key field
-    key_mode: str       # "typed", "ref" (the referenced record's id) or "generated"
-    fields: tuple       # FormFields, key first unless generated
+    scope: str  # "shared" or "site"
+    key: str  # the record's key field
+    key_mode: str  # "typed", "ref" (the referenced record's id) or "generated"
+    fields: tuple  # FormFields, key first unless generated
 
     @property
     def site_scoped(self):
@@ -87,43 +96,120 @@ SLOT_PARTS = {LINES: LINE_PARTS, PRICE_LIST: PRICE_PARTS}
 
 _STOCK = (FormField("raw_material_id", "Raw material", REF, "raw_material"), FormField("qty", "Quantity", NUMBER))
 
-KIND_FORMS = {form.name: form for form in (
-    KindForm("menu_item", "menu item", "Menu", "shared", "menu_item_id", "typed", (
-        FormField("menu_item_id", "Menu item id", TEXT), FormField("name", "Name", TEXT),
-        FormField("gl_code", "GL code", GL_CODE))),
-    KindForm("recipe", "recipe", "Menu", "shared", "menu_item_id", "ref", (
-        FormField("menu_item_id", "Menu item", REF, "menu_item"), FormField("lines", "Lines", LINES))),
-    KindForm("raw_material", "raw material", "Ingredients and suppliers", "shared", "raw_material_id", "typed", (
-        FormField("raw_material_id", "Raw material id", TEXT), FormField("name", "Name", TEXT),
-        FormField("uom", "Unit", REF, "uom"))),
-    KindForm("uom", "unit of measure", "Ingredients and suppliers", "shared", "uom_id", "typed", (
-        FormField("uom_id", "Unit id", TEXT), FormField("name", "Name", TEXT),
-        FormField("base", "Base unit", REF, "uom"), FormField("factor_to_base", "Factor to base", NUMBER))),
-    KindForm("vendor", "vendor", "Ingredients and suppliers", "shared", "vendor_id", "typed", (
-        FormField("vendor_id", "Vendor id", TEXT), FormField("name", "Name", TEXT),
-        FormField("lead_time_days", "Lead time (days)", WHOLE),
-        FormField("price_list", "Price list", PRICE_LIST, "raw_material"),
-        FormField("min_order_value", "Minimum order value", NUMBER))),
-    KindForm("employee", "employee", "Staff", "site", "employee_id", "generated", (
-        FormField("name", "Name", TEXT), FormField("job_code", "Job code", REF, "job_code"),
-        FormField("hourly_rate", "Hourly rate", NUMBER),
-        FormField("max_weekly_hours_preference", "Max weekly hours", WHOLE),
-        FormField("available_days", "Available days", DAYS_INPUT))),
-    KindForm("job_code", "job code", "Staff", "shared", "job_code", "typed", (
-        FormField("job_code", "Job code", TEXT), FormField("title", "Title", TEXT))),
-    KindForm("on_hand", "on-hand count", "Stock levels", "site", "raw_material_id", "ref", _STOCK),
-    KindForm("par_level", "par level", "Stock levels", "shared", "raw_material_id", "ref", _STOCK),
-    KindForm("reorder_point", "reorder point", "Stock levels", "shared", "raw_material_id", "ref", _STOCK),
-    KindForm("labor_rule", "labor rule", "Labor rules", "shared", "jurisdiction", "typed", (
-        FormField("jurisdiction", "Jurisdiction", TEXT),
-        FormField("weekly_ot_threshold_hours", "Weekly overtime threshold (hours)", NUMBER),
-        FormField("daily_ot_threshold_hours", "Daily overtime threshold (hours)", NUMBER),
-        FormField("ot_multiplier", "Overtime multiplier", NUMBER),
-        FormField("max_consecutive_days", "Max consecutive days", WHOLE),
-        FormField("min_rest_hours_between_shifts", "Min rest between shifts (hours)", NUMBER),
-        FormField("max_shift_length_hours", "Max shift length (hours)", NUMBER),
-        FormField("note", "Note", TEXT))),
-)}
+KIND_FORMS = {
+    form.name: form
+    for form in (
+        KindForm(
+            "menu_item",
+            "menu item",
+            "Menu",
+            "shared",
+            "menu_item_id",
+            "typed",
+            (
+                FormField("menu_item_id", "Menu item id", TEXT),
+                FormField("name", "Name", TEXT),
+                FormField("gl_code", "GL code", GL_CODE),
+            ),
+        ),
+        KindForm(
+            "recipe",
+            "recipe",
+            "Menu",
+            "shared",
+            "menu_item_id",
+            "ref",
+            (FormField("menu_item_id", "Menu item", REF, "menu_item"), FormField("lines", "Lines", LINES)),
+        ),
+        KindForm(
+            "raw_material",
+            "raw material",
+            "Ingredients and suppliers",
+            "shared",
+            "raw_material_id",
+            "typed",
+            (
+                FormField("raw_material_id", "Raw material id", TEXT),
+                FormField("name", "Name", TEXT),
+                FormField("uom", "Unit", REF, "uom"),
+            ),
+        ),
+        KindForm(
+            "uom",
+            "unit of measure",
+            "Ingredients and suppliers",
+            "shared",
+            "uom_id",
+            "typed",
+            (
+                FormField("uom_id", "Unit id", TEXT),
+                FormField("name", "Name", TEXT),
+                FormField("base", "Base unit", REF, "uom"),
+                FormField("factor_to_base", "Factor to base", NUMBER),
+            ),
+        ),
+        KindForm(
+            "vendor",
+            "vendor",
+            "Ingredients and suppliers",
+            "shared",
+            "vendor_id",
+            "typed",
+            (
+                FormField("vendor_id", "Vendor id", TEXT),
+                FormField("name", "Name", TEXT),
+                FormField("lead_time_days", "Lead time (days)", WHOLE),
+                FormField("price_list", "Price list", PRICE_LIST, "raw_material"),
+                FormField("min_order_value", "Minimum order value", NUMBER),
+            ),
+        ),
+        KindForm(
+            "employee",
+            "employee",
+            "Staff",
+            "site",
+            "employee_id",
+            "generated",
+            (
+                FormField("name", "Name", TEXT),
+                FormField("job_code", "Job code", REF, "job_code"),
+                FormField("hourly_rate", "Hourly rate", NUMBER),
+                FormField("max_weekly_hours_preference", "Max weekly hours", WHOLE),
+                FormField("available_days", "Available days", DAYS_INPUT),
+            ),
+        ),
+        KindForm(
+            "job_code",
+            "job code",
+            "Staff",
+            "shared",
+            "job_code",
+            "typed",
+            (FormField("job_code", "Job code", TEXT), FormField("title", "Title", TEXT)),
+        ),
+        KindForm("on_hand", "on-hand count", "Stock levels", "site", "raw_material_id", "ref", _STOCK),
+        KindForm("par_level", "par level", "Stock levels", "shared", "raw_material_id", "ref", _STOCK),
+        KindForm("reorder_point", "reorder point", "Stock levels", "shared", "raw_material_id", "ref", _STOCK),
+        KindForm(
+            "labor_rule",
+            "labor rule",
+            "Labor rules",
+            "shared",
+            "jurisdiction",
+            "typed",
+            (
+                FormField("jurisdiction", "Jurisdiction", TEXT),
+                FormField("weekly_ot_threshold_hours", "Weekly overtime threshold (hours)", NUMBER),
+                FormField("daily_ot_threshold_hours", "Daily overtime threshold (hours)", NUMBER),
+                FormField("ot_multiplier", "Overtime multiplier", NUMBER),
+                FormField("max_consecutive_days", "Max consecutive days", WHOLE),
+                FormField("min_rest_hours_between_shifts", "Min rest between shifts (hours)", NUMBER),
+                FormField("max_shift_length_hours", "Max shift length (hours)", NUMBER),
+                FormField("note", "Note", TEXT),
+            ),
+        ),
+    )
+}
 
 DATA_SETS = {}
 for _form in KIND_FORMS.values():
@@ -148,7 +234,7 @@ def field_key(mode, kind, site, record, version, field):
 
 def form_key_prefix(mode, kind, site, record, version):
     """The prefix every ``field_key`` of one form starts with."""
-    return field_key(mode, kind, site, record, version, "")[:-len('""]')]
+    return field_key(mode, kind, site, record, version, "")[: -len('""]')]
 
 
 def slot_field(field, slot, part):

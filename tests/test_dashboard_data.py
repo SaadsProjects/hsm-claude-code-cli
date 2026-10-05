@@ -3,6 +3,7 @@ Tests for the read-only dashboard: the schedule GET route, the Streamlit-free
 loaders in dashboard/data.py, and a smoke render of dashboard/app.py via
 Streamlit's AppTest -- all against a mock server on an ephemeral port.
 """
+
 import sys
 import threading
 from pathlib import Path
@@ -20,10 +21,20 @@ from mock_hsm.server import Handler, ThreadingHTTPServer
 
 APP_PATH = Path(__file__).resolve().parent.parent / "dashboard" / "app.py"
 SHIFTS = [
-    {"employee_id": "emp_site_001_02", "date": "2026-01-05", "role": "JC-COOK", "start_time": "09:00",
-     "end_time": "17:00"},
-    {"employee_id": "emp_site_001_01", "date": "2026-01-05", "role": "JC-LEAD", "start_time": "22:00",
-     "end_time": "06:00"},
+    {
+        "employee_id": "emp_site_001_02",
+        "date": "2026-01-05",
+        "role": "JC-COOK",
+        "start_time": "09:00",
+        "end_time": "17:00",
+    },
+    {
+        "employee_id": "emp_site_001_01",
+        "date": "2026-01-05",
+        "role": "JC-LEAD",
+        "start_time": "22:00",
+        "end_time": "06:00",
+    },
 ]
 
 
@@ -114,8 +125,13 @@ def test_schedule_frame_totals_stay_numeric_when_all_unknown():
 
 
 def test_schedule_frame_tolerates_malformed_shifts():
-    shifts = ["junk", None, {"employee_id": ["a"], "date": ["x"], "start_time": 900, "end_time": "17:00"},
-              {"employee_id": {"id": 1}}, SHIFTS[0]]
+    shifts = [
+        "junk",
+        None,
+        {"employee_id": ["a"], "date": ["x"], "start_time": 900, "end_time": "17:00"},
+        {"employee_id": {"id": 1}},
+        SHIFTS[0],
+    ]
     frame = data.schedule_frame(shifts, [])
     assert len(frame) == 5
     # Non-text values are shown as text; a non-dict entry is a shift with nothing known.

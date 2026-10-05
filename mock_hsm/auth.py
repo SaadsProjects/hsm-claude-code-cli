@@ -12,6 +12,7 @@ and enforces scope exactly like the real services would trust Apigee-passed
 claims -- swap this module for a real OIDC/Apigee client and nothing else
 in the demo has to change.
 """
+
 import base64
 import hashlib
 import hmac

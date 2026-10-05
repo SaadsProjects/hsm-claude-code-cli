@@ -1,0 +1,21 @@
+# Line coverage for the CI coverage gate (scripts/coverage_gate.py).
+# The measured set is fixed: never narrow it to make a run pass.
+[run]
+source =
+    agents
+    dashboard
+    mock_hsm
+    mcp_server
+    .claude/hooks
+# The MCP server and the hook scripts run as subprocesses in their tests;
+# measure them there too instead of under-reporting them.
+patch = subprocess
+parallel = true
+data_file = .coverage
+
+[report]
+omit =
+    tests/*
+
+[json]
+output = coverage.json

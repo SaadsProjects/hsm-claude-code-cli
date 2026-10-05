@@ -14,7 +14,7 @@ See `CLAUDE_CODE_CLI_PLAN.md` for the full design writeup and rationale.
 ```bash
 # Requires Python 3.10+ (the mcp SDK's minimum). Recommended: a venv.
 python3 -m venv .venv && source .venv/bin/activate
-pip install -r requirements.txt
+pip install --require-hashes -r requirements-dev.txt   # dev/test lock; requirements.txt is the hosted-app runtime lock
 
 # Terminal 1 -- start the mock HSM backend
 bash scripts/start_mock_server.sh
@@ -323,7 +323,7 @@ dirty lint result blocks the commit regardless of what the review
 concluded or what a human approved. It lints what the commit will
 actually contain in this project's repo: the staged index, plus tracked
 working-tree files for `commit -a` or pathspecs, plus untracked files when
-the same command also stages (`git add . && git commit`). Install `ruff` (already in `requirements.txt`): if the hook
+the same command also stages (`git add . && git commit`). Install `ruff` (already in `requirements-dev.txt`): if the hook
 can't find it on PATH, in `.venv/bin`, or as `python -m ruff`, it blocks
 the commit rather than letting it through unchecked.
 

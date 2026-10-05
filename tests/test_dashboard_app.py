@@ -13,6 +13,7 @@ closed port, so the client raises its own outcome-unknown HsmUnavailable
 with a real stored request that ``retry_write`` can re-send; an exception
 instance is raised as is.
 """
+
 import socket
 import sys
 import threading
@@ -93,6 +94,7 @@ def client_factory(base_url, dead_url, faults, monkeypatch):
 def _raiser(error):
     def raise_it(*args, **kwargs):
         raise error
+
     return raise_it
 
 
@@ -122,6 +124,7 @@ def _entries():
 
 
 # ---------------------------------------------------------------- helpers
+
 
 def log_in(at, user_id):
     at.selectbox(key="session-persona").set_value(user_id)
@@ -225,6 +228,7 @@ def hold_a_write(at, faults, job_code="jc_held"):
 
 # ------------------------------------------------------------ hidden write
 
+
 def test_hidden_shared_write_sent_through_the_client_is_refused_and_audited(client_factory):
     # NFR1.1: the dashboard hides shared-kind controls from the Restaurant
     # Manager, but the backend is what refuses and audits such a write.
@@ -241,6 +245,7 @@ def test_hidden_shared_write_sent_through_the_client_is_refused_and_audited(clie
 
 # ---------------------------------------------------------- login (WF1-3)
 
+
 def test_logged_out_view_shows_only_the_login(app):
     assert tab_labels(app) == []
     assert [i.value for i in app.info] == ["Log in to see the dashboard."]
@@ -254,8 +259,7 @@ def test_login_and_logout_for_each_persona(app, user_id):
     login = app.session_state["login"]
     assert login["user_id"] == user_id
     name = USERS[user_id]["name"]
-    assert (f"Logged in as {escape_md(name)} ({escape_md(login['persona'])})"
-            in [c.value for c in app.sidebar.caption])
+    assert f"Logged in as {escape_md(name)} ({escape_md(login['persona'])})" in [c.value for c in app.sidebar.caption]
     session_id = login["session_id"]
 
     click(app, "session-logout")
@@ -277,29 +281,50 @@ def test_no_publish_or_submit_button_for_any_persona(app, user_id):
 
 # ------------------------------------------------- add, edit, delete (WF5)
 
+
 def _prepare_on_hand():
     client, session_id = admin_client()
     client.add_record("uom", {"uom_id": "u_p", "name": "piece", "base": "u_p", "factor_to_base": 1}, session_id)
     client.add_record("raw_material", {"raw_material_id": "rm_t", "name": "Test", "uom": "u_p"}, session_id)
 
 
-LABOR_RULE = {"jurisdiction": "TX", "weekly_ot_threshold_hours": 40.0, "daily_ot_threshold_hours": 8.0,
-              "ot_multiplier": 1.5, "max_consecutive_days": 6, "min_rest_hours_between_shifts": 8.0,
-              "max_shift_length_hours": 12.0, "note": "test rule"}
+LABOR_RULE = {
+    "jurisdiction": "TX",
+    "weekly_ot_threshold_hours": 40.0,
+    "daily_ot_threshold_hours": 8.0,
+    "ot_multiplier": 1.5,
+    "max_consecutive_days": 6,
+    "min_rest_hours_between_shifts": 8.0,
+    "max_shift_length_hours": 12.0,
+    "note": "test rule",
+}
 
 CRUD_CASES = [
-    ("Menu", "menu_item", None, None, {"menu_item_id": "mi_t", "name": "Taco", "gl_code": "GL-FOOD"},
-     {"name": "Tacos"}),
-    ("Ingredients and suppliers", "uom", None, None,
-     {"uom_id": "u_t", "name": "unit", "base": kind_forms.SELF_BASE, "factor_to_base": 1.0}, {"name": "units"}),
+    (
+        "Menu",
+        "menu_item",
+        None,
+        None,
+        {"menu_item_id": "mi_t", "name": "Taco", "gl_code": "GL-FOOD"},
+        {"name": "Tacos"},
+    ),
+    (
+        "Ingredients and suppliers",
+        "uom",
+        None,
+        None,
+        {"uom_id": "u_t", "name": "unit", "base": kind_forms.SELF_BASE, "factor_to_base": 1.0},
+        {"name": "units"},
+    ),
     ("Staff", "job_code", None, None, {"job_code": "jc_t", "title": "Cook"}, {"title": "Head cook"}),
     ("Stock levels", "on_hand", SITE, _prepare_on_hand, {"raw_material_id": "rm_t", "qty": 5.0}, {"qty": 7.5}),
     ("Labor rules", "labor_rule", None, None, LABOR_RULE, {"note": "changed"}),
 ]
 
 
-@pytest.mark.parametrize(("data_set", "kind", "site", "prepare", "values", "change"), CRUD_CASES,
-                         ids=[case[1] for case in CRUD_CASES])
+@pytest.mark.parametrize(
+    ("data_set", "kind", "site", "prepare", "values", "change"), CRUD_CASES, ids=[case[1] for case in CRUD_CASES]
+)
 def test_add_edit_and_delete_one_kind_in_each_data_set(app, data_set, kind, site, prepare, values, change):
     if prepare:
         prepare()
@@ -405,8 +430,9 @@ def test_empty_reference_lists_disable_the_submit_with_the_reason(app):
     click(app, "session-logout")
     log_in(app, RM)
     pick(app, "Staff", "employee")
-    assert ("No dashboard-added job code exists yet; a regional role must add one first"
-            in [c.value for c in app.caption])
+    assert "No dashboard-added job code exists yet; a regional role must add one first" in [
+        c.value for c in app.caption
+    ]
     assert app.button(key="manage-employee-add-submit").disabled
 
 
@@ -415,13 +441,27 @@ def test_reference_options_list_only_dashboard_added_records(app):
     client.add_record("job_code", {"job_code": "jc_ref", "title": "Ref"}, session_id)
     log_in(app, RM)
     pick(app, "Staff", "employee")
-    options = widget(app, kind_forms.field_key("add", "employee", SITE, None, _add_version(app, "employee", SITE),
-                                               "job_code")).options
+    options = widget(
+        app, kind_forms.field_key("add", "employee", SITE, None, _add_version(app, "employee", SITE), "job_code")
+    ).options
     assert options == ["jc_ref"]  # the seeded JC-* codes are not offered
     assert not app.button(key="manage-employee-add-submit").disabled
 
-    fill(app, "add", "employee", SITE, None, None, {"name": "Kim", "job_code": "jc_ref", "hourly_rate": 15.0,
-                                                    "max_weekly_hours_preference": 30, "available_days": ["Mon"]})
+    fill(
+        app,
+        "add",
+        "employee",
+        SITE,
+        None,
+        None,
+        {
+            "name": "Kim",
+            "job_code": "jc_ref",
+            "hourly_rate": 15.0,
+            "max_weekly_hours_preference": 30,
+            "available_days": ["Mon"],
+        },
+    )
     click(app, "manage-employee-add-submit")
     assert notice(app)["level"] == "success", notice(app)
     (employee_id,) = app.session_state["added"][f"employee@{SITE}"]
@@ -441,6 +481,7 @@ def test_refusal_shows_the_message_and_problems(app):
 
 # ------------------------------------------------------- bulk upload (WF6)
 
+
 def _uploader_key(at, kind, site=None):
     try:
         generation = at.session_state["upload_generation"].get((kind, site), 0)
@@ -458,7 +499,7 @@ def test_accepted_upload_adds_every_row(app):
     log_in(app, REGIONAL)
     pick(app, "Staff", "job_code")
     assert app.session_state["templates"][("job_code", None)]["columns"] == ["job_code", "title"]
-    _upload(app, "job_code", "job_code,title\njc_a,A\n\njc_b,\"B, the second\"\n")
+    _upload(app, "job_code", 'job_code,title\njc_a,A\n\njc_b,"B, the second"\n')
     assert notice(app)["message"] == "Added 2 records from jobs.csv."
     assert app.session_state["added"]["job_code"] == ["jc_a", "jc_b"]
     assert records("job_code")["jc_b"][0]["title"] == "B, the second"
@@ -469,8 +510,9 @@ def test_refused_upload_lists_problem_rows_and_saves_nothing(app):
     pick(app, "Staff", "job_code")
     _upload(app, "job_code", "job_code,title\njc_a,A\n,B\njc_c\n")
     assert notice(app)["level"] == "error"
-    assert actions.NOTHING_SAVED in [c.value for c in app.caption] or \
-        escape_md(actions.NOTHING_SAVED) in [c.value for c in app.caption]
+    assert actions.NOTHING_SAVED in [c.value for c in app.caption] or escape_md(actions.NOTHING_SAVED) in [
+        c.value for c in app.caption
+    ]
     problems = problem_frame(app)
     assert list(problems.columns) == ["row", "field", "reason"]
     assert set(problems["row"]) >= {2, 3}
@@ -487,6 +529,7 @@ def test_upload_refused_locally_sends_nothing(app):
 
 
 # ---------------------------------------- unconfirmed writes (WF7, WF8)
+
 
 def test_no_answer_write_shows_the_banner_in_the_same_run_and_try_again_saves_once(app, faults):
     log_in(app, REGIONAL)
@@ -576,6 +619,7 @@ def test_unexpected_client_error_still_renders_the_page(app, faults):
 
 # ---------------------------------------------------- session end (WF2)
 
+
 def test_session_ended_by_the_clock_logs_out_with_the_reason(app, clock):
     log_in(app, REGIONAL)
     clock(timedelta(minutes=16))
@@ -608,6 +652,7 @@ def test_unreachable_session_check_keeps_the_login_and_the_banner(app, faults):
 
 
 # --------------------------------------------------------- audit (WF9)
+
 
 def _audit_frame(at):
     return next(df.value for df in at.dataframe if "outcome" in df.value.columns)
@@ -656,6 +701,7 @@ def test_audit_reloads_after_every_write_outcome(app):
 
 
 # ------------------------------------------------ escaping and secrets
+
 
 def test_notices_are_escaped_but_options_are_shown_as_is(app):
     # Notices render Markdown, so they are escaped (NFR1.5). Selectbox options
@@ -718,8 +764,13 @@ def test_two_identical_employee_adds_create_two_employees(app):
     client.add_record("job_code", {"job_code": "jc_twin", "title": "Twin"}, session_id)
     log_in(app, RM)
     pick(app, "Staff", "employee")
-    values = {"name": "Alex", "job_code": "jc_twin", "hourly_rate": 15.0,
-              "max_weekly_hours_preference": 40, "available_days": ["Mon"]}
+    values = {
+        "name": "Alex",
+        "job_code": "jc_twin",
+        "hourly_rate": 15.0,
+        "max_weekly_hours_preference": 40,
+        "available_days": ["Mon"],
+    }
     for _ in range(2):
         fill(app, "add", "employee", SITE, None, None, values)
         click(app, "manage-employee-add-submit")
@@ -786,6 +837,7 @@ def test_identical_resubmission_after_a_refusal_sends_a_new_id(app):
 
 # ------------------------------------- per-session Manage data cache (Q3)
 
+
 @pytest.fixture
 def list_reads(monkeypatch):
     """Count the dashboard's ``list_records`` reads, as (kind, site)."""
@@ -833,6 +885,7 @@ def test_a_write_outcome_reloads_the_manage_data_reads(app, list_reads):
 
 # ========================================================= timing (NFR4)
 
+
 @pytest.fixture
 def calls(monkeypatch):
     """Count every HTTP call the dashboard's clients make, as (method, path)."""
@@ -857,8 +910,10 @@ def _bulk_job_codes(count, prefix):
     client = session.client_for(REGIONAL)
     for start in range(0, count, 100):
         session_id = client.start_session()["session_id"]
-        rows = [{"row": i + 1, "record": {"job_code": f"{prefix}{start + i:04d}", "title": f"Job {start + i}"}}
-                for i in range(min(100, count - start))]
+        rows = [
+            {"row": i + 1, "record": {"job_code": f"{prefix}{start + i:04d}", "title": f"Job {start + i}"}}
+            for i in range(min(100, count - start))
+        ]
         client.bulk_add("job_code", rows, "seed.csv", session_id)
 
 
@@ -886,7 +941,8 @@ def test_nfr4_2_a_500_row_upload_shows_its_result_within_5_seconds(app, monkeypa
     pick(app, "Staff", "job_code")
     rows = "".join(f"jc_{i:04d},Job {i}\n" for i in range(500))
     app.file_uploader(key=_uploader_key(app, "job_code")).set_value(
-        ("big.csv", ("job_code,title\n" + rows).encode(), "text/csv"))
+        ("big.csv", ("job_code,title\n" + rows).encode(), "text/csv")
+    )
     app.button(key="manage-job_code-upload").click()
     started = time.perf_counter()
     app.run()
@@ -955,6 +1011,11 @@ def test_nfr4_4_a_logged_in_refresh_makes_the_same_overview_reads_as_before(app,
         session.client_for(REGIONAL).list_records(name)
     list_reads.update(calls)
     existing = Counter(refreshed) - list_reads
-    existing = Counter({call: n for call, n in existing.items()
-                        if not call[1].startswith(U4_PREFIXES) and not call[1].endswith("/template")})
+    existing = Counter(
+        {
+            call: n
+            for call, n in existing.items()
+            if not call[1].startswith(U4_PREFIXES) and not call[1].endswith("/template")
+        }
+    )
     assert existing == expected

@@ -52,6 +52,7 @@ unavailable; every later ``append`` and ``page`` raises ``AuditUnavailable``
 until ``configure`` runs again (in practice, a backend restart after an
 operator fixes the cause -- see the README's "Audit trail" section).
 """
+
 import contextlib
 import json
 import os
@@ -64,21 +65,22 @@ from pathlib import Path
 ENV_PATH = "HSM_AUDIT_PATH"
 DEFAULT_PATH = Path(__file__).resolve().parent / "audit" / "audit.jsonl"
 
-ENTRY_MAX_BYTES = 16 * 1024           # NFR2.3: encoded entry cap
-TEXT_MAX_CHARS = 1024                 # NFR2.3: caller-supplied text fields are cut to this
-RETENTION = timedelta(days=90)        # BR2.5: entries older than this are purged
+ENTRY_MAX_BYTES = 16 * 1024  # NFR2.3: encoded entry cap
+TEXT_MAX_CHARS = 1024  # NFR2.3: caller-supplied text fields are cut to this
+RETENTION = timedelta(days=90)  # BR2.5: entries older than this are purged
 PURGE_INTERVAL = timedelta(hours=24)  # NFR3.14: lazy purge check interval
-PAGE_SIZE = 50                        # BR4.3: fixed page size
-ID_WIDTH = 12                         # BR1.7: zero-padded entry id width
+PAGE_SIZE = 50  # BR4.3: fixed page size
+ID_WIDTH = 12  # BR1.7: zero-padded entry id width
 
 UNKNOWN_USER = "unknown"
 SOURCES = frozenset({"dashboard", "claude_code_workflow"})
-ACTIONS = frozenset({"add", "update", "delete", "bulk_row", "publish_schedule",
-                     "submit_purchase_order", "login", "logout"})
+ACTIONS = frozenset(
+    {"add", "update", "delete", "bulk_row", "publish_schedule", "submit_purchase_order", "login", "logout"}
+)
 OUTCOMES = frozenset({"allowed", "violation"})
 
 _ID_RE = re.compile(rf"\d{{{ID_WIDTH}}}")
-_MAX_ID = 10 ** ID_WIDTH - 1
+_MAX_ID = 10**ID_WIDTH - 1
 
 
 class AuditUnavailable(Exception):
@@ -113,6 +115,7 @@ class _RollbackFailed(OSError):
 
 # ================================================================== logging
 
+
 def _log(level, message):
     """One line on stderr. Never include entry changes, tokens or session ids."""
     print(f"[mock-hsm] {level} audit: {message}", file=sys.stderr, flush=True)
@@ -131,6 +134,7 @@ def _log_safe(value):
 # ============================================================ storage layer
 # AuditFile: plain file helpers. None of them take a lock; the business
 # logic decides which ones run under the audit lock.
+
 
 def _resolve_path(path=None):
     if path is not None:
@@ -221,13 +225,13 @@ class _Row:
     __slots__ = ("call", "call_hwm", "entry", "entry_id", "site_id", "timestamp", "user_id")
 
     def __init__(self, entry, call, call_hwm, timestamp):
-        self.entry = entry                   # the stored entry dict; never handed out directly
+        self.entry = entry  # the stored entry dict; never handed out directly
         self.entry_id = int(entry["entry_id"])
         self.site_id = entry.get("site_id")
         self.user_id = entry.get("user_id")
-        self.timestamp = timestamp           # aware datetime, for the purge
-        self.call = call                     # which append call (stored line) it came from
-        self.call_hwm = call_hwm             # that line's high-water mark
+        self.timestamp = timestamp  # aware datetime, for the purge
+        self.call = call  # which append call (stored line) it came from
+        self.call_hwm = call_hwm  # that line's high-water mark
 
 
 def _check_entry(obj):
@@ -273,11 +277,11 @@ class _Loaded:
     """Result of reading the file at startup."""
 
     def __init__(self):
-        self.rows = []        # _Row, in id order
-        self.hwm = 0          # the larger of every line's hwm and every entry id
-        self.legacy = False   # any line still in the old layout
-        self.calls = 0        # number of stored lines (the next call number)
-        self.torn = False     # a torn last line was cut off
+        self.rows = []  # _Row, in id order
+        self.hwm = 0  # the larger of every line's hwm and every entry id
+        self.legacy = False  # any line still in the old layout
+        self.calls = 0  # number of stored lines (the next call number)
+        self.torn = False  # a torn last line was cut off
 
 
 def _load(path):
@@ -346,8 +350,20 @@ def _write_temp(path, hwm, rows):
 # validation and the 16 KB cap, the unavailable state and the lazy purge.
 
 # Entry fields in stored order (after entry_id and timestamp, which AuditLog assigns).
-_FIELDS = ("user_id", "persona", "session_id", "source", "action", "outcome",
-           "kind", "record_id", "site_id", "changes", "reason", "file_row")
+_FIELDS = (
+    "user_id",
+    "persona",
+    "session_id",
+    "source",
+    "action",
+    "outcome",
+    "kind",
+    "record_id",
+    "site_id",
+    "changes",
+    "reason",
+    "file_row",
+)
 _REQUIRED = ("user_id", "source", "action", "outcome")
 _OPTIONAL_STR = ("persona", "session_id", "kind", "record_id", "site_id", "reason")
 _CUT_FIELDS = ("kind", "record_id", "site_id", "reason")  # identity fields are never cut (NFR6.1)
@@ -357,7 +373,7 @@ _CUT_FIELDS = ("kind", "record_id", "site_id", "reason")  # identity fields are 
 _TIMESTAMP_CHARS = len(datetime(2000, 1, 1, tzinfo=timezone.utc).isoformat(timespec="microseconds"))
 _PREFIX_BYTES = len(b'{"entry_id":"","timestamp":"",') + ID_WIDTH + _TIMESTAMP_CHARS - 1
 
-_lock = threading.Lock()         # the audit lock; never re-entered (see *_locked)
+_lock = threading.Lock()  # the audit lock; never re-entered (see *_locked)
 _purge_mutex = threading.Lock()  # serializes purges and (re)configuration; taken before _lock
 
 
@@ -371,12 +387,12 @@ class _State:
     def __init__(self, path, clock):
         self.path = path
         self.clock = clock
-        self.fd = None           # the single append descriptor
-        self.rows = []           # AuditMemory: retained entries, in id order
-        self.next_id = 1         # one above the high-water mark
-        self.next_call = 0       # call number of the next stored line
-        self.legacy = False      # the file still holds old-layout lines
-        self.last_purge = None   # clock time the last purge ran
+        self.fd = None  # the single append descriptor
+        self.rows = []  # AuditMemory: retained entries, in id order
+        self.next_id = 1  # one above the high-water mark
+        self.next_call = 0  # call number of the next stored line
+        self.legacy = False  # the file still holds old-layout lines
+        self.last_purge = None  # clock time the last purge ran
         self.unavailable = None  # reason string once failed closed
 
 
@@ -390,6 +406,7 @@ _current = _Current()
 
 
 # ------------------------------------------------------------- configuration
+
 
 def configure(path=None, clock=None):
     """Point the module at ``path`` (default: ``$HSM_AUDIT_PATH`` or
@@ -438,8 +455,11 @@ def _init_locked(path, clock):
     state.legacy = loaded.legacy
     purged = _purge_locked(state)
     if state.unavailable is None:
-        _log("INFO", f"loaded {len(loaded.rows)} entries, torn line {'dropped' if loaded.torn else 'none'}, "
-                     f"purged {purged}, high-water mark {state.next_id - 1:0{ID_WIDTH}d}")
+        _log(
+            "INFO",
+            f"loaded {len(loaded.rows)} entries, torn line {'dropped' if loaded.torn else 'none'}, "
+            f"purged {purged}, high-water mark {state.next_id - 1:0{ID_WIDTH}d}",
+        )
     return state
 
 
@@ -449,6 +469,7 @@ def _fail_locked(state, reason):
 
 
 # ---------------------------------------------------------------------- purge
+
 
 def _purge_locked(state):
     """Remove entries older than 90 days (BR2.5, NFR3.14); returns how many.
@@ -469,15 +490,19 @@ def _purge_locked(state):
     try:
         tmp = _write_temp(state.path, state.next_id - 1, kept)
     except OSError as e:
-        _log("ERROR", f"purge failed before swap, writing temp file ({e}); old file kept, trail available, "
-                      f"retry in 24 hours")
+        _log(
+            "ERROR",
+            f"purge failed before swap, writing temp file ({e}); old file kept, trail available, retry in 24 hours",
+        )
         return 0
     try:
         os.replace(tmp, state.path)
     except OSError as e:
         tmp.unlink(missing_ok=True)
-        _log("ERROR", f"purge failed before swap, replacing file ({e}); old file kept, trail available, "
-                      f"retry in 24 hours")
+        _log(
+            "ERROR",
+            f"purge failed before swap, replacing file ({e}); old file kept, trail available, retry in 24 hours",
+        )
         return 0
     try:
         _fsync_dir(state.path)
@@ -510,6 +535,7 @@ def _maybe_purge():
 
 
 # --------------------------------------------------------------------- append
+
 
 def append(entry):
     """Record one audited attempt durably and return its ``entry_id``.
@@ -549,8 +575,10 @@ def _append_call(prepared, operation):
         now = state.clock().astimezone(timezone.utc)
         timestamp = now.isoformat(timespec="microseconds")
         ids = [f"{first_id + i:0{ID_WIDTH}d}" for i in range(len(prepared))]
-        encoded = [b'{"entry_id":"%s","timestamp":"%s",' % (entry_id.encode(), timestamp.encode()) + body[1:]
-                   for entry_id, (body, _) in zip(ids, prepared, strict=True)]
+        encoded = [
+            b'{"entry_id":"%s","timestamp":"%s",' % (entry_id.encode(), timestamp.encode()) + body[1:]
+            for entry_id, (body, _) in zip(ids, prepared, strict=True)
+        ]
         try:
             _append_line(state.fd, _encode_call(hwm, encoded))
         except OSError as e:
@@ -558,8 +586,10 @@ def _append_call(prepared, operation):
             _log("ERROR", _append_failure_message(operation, e, prepared, state.path))
             raise AuditUnavailable(state.unavailable) from e
         call = state.next_call
-        state.rows.extend(_Row({"entry_id": entry_id, "timestamp": timestamp, **record}, call, hwm, now)
-                          for entry_id, (_, record) in zip(ids, prepared, strict=True))
+        state.rows.extend(
+            _Row({"entry_id": entry_id, "timestamp": timestamp, **record}, call, hwm, now)
+            for entry_id, (_, record) in zip(ids, prepared, strict=True)
+        )
         state.next_id = hwm + 1
         state.next_call = call + 1
     return ids
@@ -574,8 +604,10 @@ def _append_failure_message(operation, error, prepared, path):
         what = f"{len(prepared)} entries, first {what}"
     message = f"{operation} failed ({error}) for {what}; trail unavailable"
     if isinstance(error, _RollbackFailed):
-        message += (f"; rollback failed ({error.rollback_error}): remove every byte from offset {error.offset}"
-                    f" onward in {path} before restarting")
+        message += (
+            f"; rollback failed ({error.rollback_error}): remove every byte from offset {error.offset}"
+            f" onward in {path} before restarting"
+        )
     return message
 
 
@@ -649,6 +681,7 @@ def _encode_capped(record):
 
 # ----------------------------------------------------------------------- page
 
+
 def page(viewer, before=None):
     """One page of the audit view, newest first (BR4.1-BR4.4).
 
@@ -699,5 +732,9 @@ def _select_page(snapshot, visible, before_id):
             has_more = True
     # Hand out copies, so no caller can change the in-memory copy.
     entries = [json.loads(_dumps(row.entry)) for row in picked]
-    return {"entries": entries, "next_before": entries[-1]["entry_id"] if has_more else None,
-            "limit": PAGE_SIZE, "total": total}
+    return {
+        "entries": entries,
+        "next_before": entries[-1]["entry_id"] if has_more else None,
+        "limit": PAGE_SIZE,
+        "total": total,
+    }

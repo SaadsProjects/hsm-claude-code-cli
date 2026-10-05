@@ -22,6 +22,7 @@ permission flow (the "ask" rule in settings.json), so this hook only ever
 actively BLOCKS -- it never grants a bypass. It falls through only after a
 successful validation with zero violations; any failure to validate denies.
 """
+
 import json
 import os
 import sys
@@ -35,13 +36,17 @@ BACKEND_TIMEOUT_SECONDS = 5
 
 
 def deny(reason: str):
-    print(json.dumps({
-        "hookSpecificOutput": {
-            "hookEventName": "PreToolUse",
-            "permissionDecision": "deny",
-            "permissionDecisionReason": reason,
-        }
-    }))
+    print(
+        json.dumps(
+            {
+                "hookSpecificOutput": {
+                    "hookEventName": "PreToolUse",
+                    "permissionDecision": "deny",
+                    "permissionDecisionReason": reason,
+                }
+            }
+        )
+    )
     sys.exit(0)
 
 

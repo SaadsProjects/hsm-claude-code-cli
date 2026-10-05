@@ -9,6 +9,7 @@ Every NFR6 item is a named test here: ``test_rights_matrix``,
 ``test_record_100_is_accepted_and_record_101_refused`` (per persona) and
 ``test_dev_tester_entries_carry_its_own_user_id``.
 """
+
 import copy
 import sys
 import threading
@@ -84,8 +85,9 @@ class Session:
         return writes.write(kind, "add", self.claims, _site(kind, site), None, self.body(record=record))
 
     def update(self, kind, key, record, version, site=None):
-        return writes.write(kind, "update", self.claims, _site(kind, site), key,
-                            self.body(record=record, version=version))
+        return writes.write(
+            kind, "update", self.claims, _site(kind, site), key, self.body(record=record, version=version)
+        )
 
     def delete(self, kind, key, version, site=None):
         return writes.write(kind, "delete", self.claims, _site(kind, site), key, self.body(version=version))
@@ -95,8 +97,9 @@ class Session:
         return self.bulk_rows(kind, rows, site)
 
     def bulk_rows(self, kind, rows, site=None):
-        return writes.bulk(kind, self.claims, _site(kind, site),
-                           self.body(source="csv", file_name="upload.csv", rows=rows))
+        return writes.bulk(
+            kind, self.claims, _site(kind, site), self.body(source="csv", file_name="upload.csv", rows=rows)
+        )
 
 
 def _site(kind, site):
@@ -104,6 +107,7 @@ def _site(kind, site):
 
 
 # ------------------------------------------------------------ record factories
+
 
 def _uom(uom_id, base=None):
     return {"uom_id": uom_id, "name": f"unit {uom_id}", "base": base or uom_id, "factor_to_base": 1}
@@ -119,17 +123,34 @@ def _record(kind, tag):
         "recipe": {"menu_item_id": f"mi_{tag}", "lines": [{"raw_material_id": "rm_w", "qty": 1, "uom": "u_w"}]},
         "raw_material": _raw_material(f"rm_{tag}"),
         "uom": _uom(f"u_{tag}"),
-        "vendor": {"vendor_id": f"v_{tag}", "name": f"Vendor {tag}", "lead_time_days": 2,
-                   "price_list": {"rm_w": 1.25}, "min_order_value": 10},
-        "employee": {"name": f"Emp {tag}", "job_code": "jc_w", "hourly_rate": 14.5,
-                     "max_weekly_hours_preference": 30, "available_days": ["Mon", "Wed"]},
+        "vendor": {
+            "vendor_id": f"v_{tag}",
+            "name": f"Vendor {tag}",
+            "lead_time_days": 2,
+            "price_list": {"rm_w": 1.25},
+            "min_order_value": 10,
+        },
+        "employee": {
+            "name": f"Emp {tag}",
+            "job_code": "jc_w",
+            "hourly_rate": 14.5,
+            "max_weekly_hours_preference": 30,
+            "available_days": ["Mon", "Wed"],
+        },
         "job_code": {"job_code": f"jc_{tag}", "title": f"Title {tag}"},
         "on_hand": {"raw_material_id": f"rm_{tag}", "qty": 5},
         "par_level": {"raw_material_id": f"rm_{tag}", "qty": 5},
         "reorder_point": {"raw_material_id": f"rm_{tag}", "qty": 5},
-        "labor_rule": {"jurisdiction": f"J_{tag}", "weekly_ot_threshold_hours": 40, "daily_ot_threshold_hours": 8,
-                       "ot_multiplier": 1.5, "max_consecutive_days": 6, "min_rest_hours_between_shifts": 10,
-                       "max_shift_length_hours": 10, "note": "Test rule"},
+        "labor_rule": {
+            "jurisdiction": f"J_{tag}",
+            "weekly_ot_threshold_hours": 40,
+            "daily_ot_threshold_hours": 8,
+            "ot_multiplier": 1.5,
+            "max_consecutive_days": 6,
+            "min_rest_hours_between_shifts": 10,
+            "max_shift_length_hours": 10,
+            "note": "Test rule",
+        },
     }[kind]
 
 
@@ -173,6 +194,7 @@ def setup():
 
 # ================================================================ rights (NFR6)
 
+
 @pytest.mark.parametrize("persona", PERSONAS)
 @pytest.mark.parametrize("kind", ALL_KINDS)
 def test_rights_matrix(setup, kind, persona):
@@ -206,11 +228,20 @@ def test_restaurant_manager_shared_write_is_denied_and_audited(setup):
     assert (status, body) == (403, {"error": "persona RESTAURANT_MANAGER cannot write shared data"})
     assert before == db.JOB_CODES
     entry = _data_entries()[-1]
-    assert {k: entry[k] for k in ("user_id", "persona", "session_id", "source", "action", "outcome", "kind",
-                                  "record_id", "reason")} == {
-        "user_id": RM, "persona": "RESTAURANT_MANAGER", "session_id": rm.id, "source": "dashboard",
-        "action": "add", "outcome": "violation", "kind": "job_code", "record_id": "jc_rm",
-        "reason": "persona RESTAURANT_MANAGER cannot write shared data"}
+    assert {
+        k: entry[k]
+        for k in ("user_id", "persona", "session_id", "source", "action", "outcome", "kind", "record_id", "reason")
+    } == {
+        "user_id": RM,
+        "persona": "RESTAURANT_MANAGER",
+        "session_id": rm.id,
+        "source": "dashboard",
+        "action": "add",
+        "outcome": "violation",
+        "kind": "job_code",
+        "record_id": "jc_rm",
+        "reason": "persona RESTAURANT_MANAGER cannot write shared data",
+    }
 
 
 def test_out_of_scope_writes_are_refused(setup):
@@ -219,7 +250,7 @@ def test_out_of_scope_writes_are_refused(setup):
     assert rm.add("employee", employee, site="site_002")[0] == 403
     assert rm.add("employee", employee, site="site_404")[0] == 404
     assert rm.add("par_level", {"raw_material_id": "rm_w", "qty": 1})[0] == 403  # shared data
-    assert rm.update("employee", "emp_site_001_01", employee, 1)[0] == 403        # seeded record
+    assert rm.update("employee", "emp_site_001_01", employee, 1)[0] == 403  # seeded record
     assert setup.update("uom", "lb", _uom("lb"), 1)[0] == 403
     # A record at another site is reported as not found through a site_001 path (NFR1.5).
     status, body = setup.add("employee", employee, site="site_002")
@@ -262,7 +293,9 @@ def test_dev_tester_entries_carry_its_own_user_id(setup):
     login, *rest = [e for e in _entries() if e["user_id"] == DEV]
     assert (login["action"], login["persona"], login["session_id"]) == ("login", "REGIONAL_MANAGER", dev.id)
     assert [(e["user_id"], e["persona"], e["session_id"], e["outcome"]) for e in rest] == [
-        (DEV, "REGIONAL_MANAGER", dev.id, "allowed"), (DEV, "REGIONAL_MANAGER", dev.id, "violation")]
+        (DEV, "REGIONAL_MANAGER", dev.id, "allowed"),
+        (DEV, "REGIONAL_MANAGER", dev.id, "violation"),
+    ]
     assert writes.meta_map("job_code")["jc_dev"]["created_by"] == DEV
 
 
@@ -273,6 +306,7 @@ def test_any_dashboard_record_may_be_updated_within_rights(setup):
 
 
 # ================================================================ check order
+
 
 def test_each_check_step_gives_its_first_failure_status(setup, clock):
     rm, regional = Session(RM), setup
@@ -314,21 +348,30 @@ def test_each_check_step_gives_its_first_failure_status(setup, clock):
 def test_n_mixed_attempts_give_n_entries(setup):
     before = len(_data_entries())
     regional = setup
-    outcomes = [regional.add("uom", _uom("u_m1"))[0], regional.add("uom", _uom("u_m1"))[0],
-                regional.update("uom", "u_m1", _uom("u_m1"), 1)[0], regional.update("uom", "u_m1", _uom("u_m1"), 1)[0],
-                regional.delete("uom", "lb", 1)[0], regional.delete("uom", "u_m1", 2)[0],
-                writes.write("uom", "add", regional.claims, None, None, [])[0]]
+    outcomes = [
+        regional.add("uom", _uom("u_m1"))[0],
+        regional.add("uom", _uom("u_m1"))[0],
+        regional.update("uom", "u_m1", _uom("u_m1"), 1)[0],
+        regional.update("uom", "u_m1", _uom("u_m1"), 1)[0],
+        regional.delete("uom", "lb", 1)[0],
+        regional.delete("uom", "u_m1", 2)[0],
+        writes.write("uom", "add", regional.claims, None, None, [])[0],
+    ]
     assert outcomes == [201, 400, 200, 409, 403, 200, 400]
     assert len(_data_entries()) - before == 7
 
 
 # ================================================================== references
 
-@pytest.mark.parametrize("record, field", [
-    (_raw_material("rm_x", "lb"), "uom"),
-    (_raw_material("rm_x", "u_missing"), "uom"),
-    ({"menu_item_id": "mi_burger", "lines": [{"raw_material_id": "rm_w", "qty": 1, "uom": "u_w"}]}, "menu_item_id"),
-])
+
+@pytest.mark.parametrize(
+    "record, field",
+    [
+        (_raw_material("rm_x", "lb"), "uom"),
+        (_raw_material("rm_x", "u_missing"), "uom"),
+        ({"menu_item_id": "mi_burger", "lines": [{"raw_material_id": "rm_w", "qty": 1, "uom": "u_w"}]}, "menu_item_id"),
+    ],
+)
 def test_references_to_seeded_or_missing_records_are_refused(setup, record, field):
     kind = "raw_material" if "raw_material_id" in record else "recipe"
     status, body = setup.add(kind, record)
@@ -338,11 +381,14 @@ def test_references_to_seeded_or_missing_records_are_refused(setup, record, fiel
 
 def test_nested_references_are_checked(setup):
     status, body = setup.add("vendor", {**_record("vendor", "r"), "price_list": {"rm_w": 1, "rm_bun": 2}})
-    assert (status, body["problems"]) == (400, [{"field": "price_list",
-                                                 "reason": "must be a dashboard-added raw material"}])
+    assert (status, body["problems"]) == (
+        400,
+        [{"field": "price_list", "reason": "must be a dashboard-added raw material"}],
+    )
     setup.add("menu_item", _record("menu_item", "r"))
-    status, body = setup.add("recipe", {"menu_item_id": "mi_r", "lines": [
-        {"raw_material_id": "rm_w", "qty": 1, "uom": "oz"}]})
+    status, body = setup.add(
+        "recipe", {"menu_item_id": "mi_r", "lines": [{"raw_material_id": "rm_w", "qty": 1, "uom": "oz"}]}
+    )
     assert body["problems"] == [{"field": "lines[0].uom", "reason": "must be a dashboard-added unit of measure"}]
     status, body = setup.add("employee", {**_record("employee", "r"), "job_code": "JC-COOK"})
     assert body["problems"] == [{"field": "job_code", "reason": "must be a dashboard-added job code"}]
@@ -363,16 +409,25 @@ def test_labor_rules_are_added_only_for_new_jurisdictions(setup):
 
 
 def test_employee_site_and_jurisdiction_are_derived(setup):
-    status, body = setup.add("employee", {**_record("employee", "d"), "site_id": "site_003", "jurisdiction": "XX",
-                                          "employee_id": "typed", "extra": "ignored"}, site="site_002")
+    status, body = setup.add(
+        "employee",
+        {
+            **_record("employee", "d"),
+            "site_id": "site_003",
+            "jurisdiction": "XX",
+            "employee_id": "typed",
+            "extra": "ignored",
+        },
+        site="site_002",
+    )
     assert status == 201
     record = body["record"]
-    assert (record["site_id"], record["jurisdiction"], record["employee_id"]) == (
-        "site_002", "GA", "emp_site_002_d001")
+    assert (record["site_id"], record["jurisdiction"], record["employee_id"]) == ("site_002", "GA", "emp_site_002_d001")
     assert "extra" not in db.EMPLOYEES["emp_site_002_d001"]
 
 
 # ======================================================= deletes and versions
+
 
 def test_deleting_a_record_in_use_names_its_users(setup):
     setup.add("vendor", _record("vendor", "u"))
@@ -415,6 +470,7 @@ def test_seeded_records_are_unchanged_by_writes(setup):
 
 # ===================================================================== input
 
+
 @pytest.mark.parametrize("name", ["Fresh & Co.", "O'Brien's", "x" * 100])
 def test_ordinary_names_are_accepted(setup, name):
     status, body = setup.add("vendor", {**_record("vendor", "ok"), "name": name})
@@ -447,8 +503,7 @@ def test_huge_numbers_are_refused_and_change_nothing(setup):
 
 def test_an_overlong_number_cell_is_a_row_problem_not_a_server_error(setup):
     status, body = setup.bulk("par_level", [{"raw_material_id": "rm_w", "qty": "9" * 5000}])
-    assert (status, body["problems"]) == (400, [{"row": 1, "field": "qty",
-                                                 "reason": "must be at most 1,000,000,000"}])
+    assert (status, body["problems"]) == (400, [{"row": 1, "field": "qty", "reason": "must be at most 1,000,000,000"}])
 
 
 def test_nan_in_a_record_is_a_field_problem_and_audited(setup):
@@ -459,17 +514,24 @@ def test_nan_in_a_record_is_a_field_problem_and_audited(setup):
 
 # ===================================================================== bulk
 
+
 def test_a_bulk_file_is_all_or_nothing_and_every_row_is_audited(setup):
     before = dict(db.JOB_CODES)
-    status, body = setup.bulk("job_code", [{"job_code": "jc_b1", "title": "A"}, {"job_code": "jc_b2", "title": ""},
-                                           {"job_code": "jc_b3", "title": "C"}])
-    assert (status, body) == (400, {"error": "invalid rows",
-                                    "problems": [{"row": 2, "field": "title", "reason": "is required"}]})
+    status, body = setup.bulk(
+        "job_code",
+        [{"job_code": "jc_b1", "title": "A"}, {"job_code": "jc_b2", "title": ""}, {"job_code": "jc_b3", "title": "C"}],
+    )
+    assert (status, body) == (
+        400,
+        {"error": "invalid rows", "problems": [{"row": 2, "field": "title", "reason": "is required"}]},
+    )
     assert before == db.JOB_CODES
     rows = _data_entries()[-3:]
     assert [(e["file_row"], e["action"], e["outcome"], e["reason"]) for e in rows] == [
-        (1, "bulk_row", "violation", NOT_SAVED), (2, "bulk_row", "violation", "title: is required"),
-        (3, "bulk_row", "violation", NOT_SAVED)]
+        (1, "bulk_row", "violation", NOT_SAVED),
+        (2, "bulk_row", "violation", "title: is required"),
+        (3, "bulk_row", "violation", NOT_SAVED),
+    ]
     assert len({e["entry_id"] for e in rows}) == 3
 
 
@@ -478,7 +540,10 @@ def test_an_accepted_file_adds_every_row_with_one_entry_each(setup):
     assert status == 201 and body["added"] == 3
     assert [r["record"]["job_code"] for r in body["records"]] == ["jc_ok0", "jc_ok1", "jc_ok2"]
     assert [(e["file_row"], e["outcome"], e["record_id"]) for e in _data_entries()[-3:]] == [
-        (1, "allowed", "jc_ok0"), (2, "allowed", "jc_ok1"), (3, "allowed", "jc_ok2")]
+        (1, "allowed", "jc_ok0"),
+        (2, "allowed", "jc_ok1"),
+        (3, "allowed", "jc_ok2"),
+    ]
     assert writes._state["quota"][(setup.id, "job_code")] == 4
 
 
@@ -500,7 +565,10 @@ def test_an_expired_session_with_three_rows_gets_three_entries(setup, clock):
     assert (status, body) == (401, {"error": "no active session", "problems": [{"reason": "no active session"}]})
     entries = _data_entries()[before:]
     assert [(e["user_id"], e["session_id"], e["file_row"]) for e in entries] == [
-        ("unknown", None, 1), ("unknown", None, 2), ("unknown", None, 3)]
+        ("unknown", None, 1),
+        ("unknown", None, 2),
+        ("unknown", None, 3),
+    ]
 
 
 def test_a_parse_error_row_is_a_problem_row(setup):
@@ -521,13 +589,20 @@ def test_recipe_rows_are_grouped_by_menu_item(setup):
     setup.add("menu_item", _record("menu_item", "g1"))
     setup.add("menu_item", _record("menu_item", "g2"))
     line = {"raw_material_id": "rm_w", "qty": "0.5", "uom": "u_w"}
-    status, body = setup.bulk("recipe", [{"menu_item_id": "mi_g1", **line}, {"menu_item_id": "mi_g2", **line},
-                                         {"menu_item_id": "mi_g1", **line, "qty": "2"}])
+    status, body = setup.bulk(
+        "recipe",
+        [
+            {"menu_item_id": "mi_g1", **line},
+            {"menu_item_id": "mi_g2", **line},
+            {"menu_item_id": "mi_g1", **line, "qty": "2"},
+        ],
+    )
     assert status == 201 and body["added"] == 2
-    assert db.RECIPES["mi_g1"] == [{"raw_material_id": "rm_w", "qty": 0.5, "uom": "u_w"},
-                                   {"raw_material_id": "rm_w", "qty": 2, "uom": "u_w"}]
-    assert [(e["file_row"], e["record_id"]) for e in _data_entries()[-3:]] == [(1, "mi_g1"), (2, "mi_g2"),
-                                                                              (3, "mi_g1")]
+    assert db.RECIPES["mi_g1"] == [
+        {"raw_material_id": "rm_w", "qty": 0.5, "uom": "u_w"},
+        {"raw_material_id": "rm_w", "qty": 2, "uom": "u_w"},
+    ]
+    assert [(e["file_row"], e["record_id"]) for e in _data_entries()[-3:]] == [(1, "mi_g1"), (2, "mi_g2"), (3, "mi_g1")]
     assert writes._state["quota"][(setup.id, "recipe")] == 2  # the limit counts recipes
 
 
@@ -535,8 +610,10 @@ def test_a_recipe_group_problem_is_reported_on_each_of_its_rows(setup):
     line = {"raw_material_id": "rm_w", "qty": 1, "uom": "u_w"}
     status, body = setup.bulk("recipe", [{"menu_item_id": "mi_burger", **line}, {"menu_item_id": "mi_burger", **line}])
     assert status == 400
-    group = [{"field": "menu_item_id", "reason": "must be a dashboard-added menu item"},
-             {"field": "menu_item_id", "reason": "already exists"}]
+    group = [
+        {"field": "menu_item_id", "reason": "must be a dashboard-added menu item"},
+        {"field": "menu_item_id", "reason": "already exists"},
+    ]
     assert body["problems"] == [{"row": row, **p} for row in (1, 2) for p in group]
 
 
@@ -558,16 +635,28 @@ def test_a_file_over_the_entry_limit_is_refused_whole_after_row_checks(setup):
 
 
 def test_bulk_employees_take_ids_in_row_order_from_the_path_site(setup):
-    rows = [{**_record("employee", i), "available_days": "Mon|Tue", "hourly_rate": "13",
-             "max_weekly_hours_preference": "20", "site_id": "site_001"} for i in range(3)]
+    rows = [
+        {
+            **_record("employee", i),
+            "available_days": "Mon|Tue",
+            "hourly_rate": "13",
+            "max_weekly_hours_preference": "20",
+            "site_id": "site_001",
+        }
+        for i in range(3)
+    ]
     status, body = setup.bulk("employee", rows, site="site_003")
     assert status == 201
     assert [r["record"]["employee_id"] for r in body["records"]] == [
-        "emp_site_003_d001", "emp_site_003_d002", "emp_site_003_d003"]
+        "emp_site_003_d001",
+        "emp_site_003_d002",
+        "emp_site_003_d003",
+    ]
     assert {db.EMPLOYEES[r["record"]["employee_id"]]["site_id"] for r in body["records"]} == {"site_003"}
 
 
 # ================================================================ request ids
+
 
 def test_a_repeated_request_id_replays_the_original_response(setup):
     body = setup.body(record=_uom("u_rep"))
@@ -620,7 +709,9 @@ def test_a_missing_request_id_is_never_stored(setup):
     for _ in range(2):
         body = {"session_id": setup.id, "record": _uom("u_noid")}
         assert writes.write("uom", "add", setup.claims, None, None, body) == (
-            400, {"error": "missing or malformed request id"})
+            400,
+            {"error": "missing or malformed request id"},
+        )
     assert len(_data_entries()) - before == 2
     assert all(None not in log and "" not in log for log in writes._state["requests"].values())
     too_long = {"session_id": setup.id, "request_id": "r" * 101, "record": _uom("u_noid")}
@@ -629,6 +720,7 @@ def test_a_missing_request_id_is_never_stored(setup):
 
 
 # ============================================================== malformed
+
 
 def _nested(levels):
     value = {}
@@ -648,8 +740,7 @@ def test_a_deeply_nested_record_gets_400_and_one_marker_entry(setup, levels):
     assert (entry["user_id"], entry["session_id"]) == ("unknown", setup.id)
 
 
-@pytest.mark.parametrize("body", [[1, 2], {"request_id": ["r"], "record": {}}, {"session_id": 5, "record": {}},
-                                  "text"])
+@pytest.mark.parametrize("body", [[1, 2], {"request_id": ["r"], "record": {}}, {"session_id": 5, "record": {}}, "text"])
 def test_a_malformed_envelope_gets_400_and_one_entry(setup, body):
     before = len(_data_entries())
     assert writes.write("uom", "add", setup.claims, None, None, body)[1]["error"] == "malformed request"
@@ -670,8 +761,9 @@ def test_another_users_live_session_id_is_never_recorded(setup):
     other = Session(DEV)
     writes.write("uom", "add", setup.claims, None, None, {"session_id": other.id, "record": "x"})
     assert _data_entries()[-1]["session_id"] is None
-    status, _ = writes.write("uom", "add", setup.claims, None, None,
-                             {"session_id": other.id, "request_id": str(uuid.uuid4()), "record": {}})
+    status, _ = writes.write(
+        "uom", "add", setup.claims, None, None, {"session_id": other.id, "request_id": str(uuid.uuid4()), "record": {}}
+    )
     assert status == 401
     assert _data_entries()[-1]["session_id"] is None
     assert other.id in writes._state["sessions"]  # the other user's session is untouched
@@ -685,6 +777,7 @@ def test_a_malformed_bulk_envelope_gets_one_entry(setup):
 
 
 # ============================================================== failure paths
+
 
 def _break_appends(monkeypatch):
     monkeypatch.setattr(audit, "_write_all", lambda fd, data: (_ for _ in ()).throw(OSError("read-only")))
@@ -738,8 +831,9 @@ def test_a_failed_compensating_entry_is_logged(setup, monkeypatch, capsys):
     real_batch = audit.append_batch
 
     def explode(*args):
-        monkeypatch.setattr(audit, "append_batch", lambda entries: (_ for _ in ()).throw(
-            audit.AuditUnavailable("down")))
+        monkeypatch.setattr(
+            audit, "append_batch", lambda entries: (_ for _ in ()).throw(audit.AuditUnavailable("down"))
+        )
         raise RuntimeError("boom")
 
     monkeypatch.setattr(writes, "build_stored", explode)
@@ -802,12 +896,15 @@ def test_a_failed_login_append_never_activates_the_session(setup, monkeypatch):
 
 # =================================================================== sessions
 
+
 def test_login_and_logout_are_audited_with_the_session_id():
     session = Session(DEV)
     assert writes.end_session(session.claims, session.id) == (200, {"active": False, "ended_reason": "logout"})
     login, logout = _entries()[-2:]
     assert [(e["action"], e["outcome"], e["user_id"], e["session_id"], e["source"]) for e in (login, logout)] == [
-        ("login", "allowed", DEV, session.id, "dashboard"), ("logout", "allowed", DEV, session.id, "dashboard")]
+        ("login", "allowed", DEV, session.id, "dashboard"),
+        ("logout", "allowed", DEV, session.id, "dashboard"),
+    ]
     assert writes.session_status(session.claims, session.id) == (200, {"active": False, "ended_reason": "logout"})
     assert writes.end_session(session.claims, session.id)[0] == 401
 
@@ -873,8 +970,18 @@ def test_session_ids_never_appear_in_meta(setup):
 # ======================================================== audit entry shape
 # BR8.3 (FD Q8), BR2.3, BR8.6, NFR2.7: what each entry records in ``changes``.
 
-ENTRY_FIELDS = ("user_id", "persona", "session_id", "source", "action", "kind", "record_id", "site_id",
-                "changes", "file_row")
+ENTRY_FIELDS = (
+    "user_id",
+    "persona",
+    "session_id",
+    "source",
+    "action",
+    "kind",
+    "record_id",
+    "site_id",
+    "changes",
+    "file_row",
+)
 MARKER_TEXT = "...(truncated)"
 
 
@@ -914,8 +1021,10 @@ def test_an_allowed_update_of_each_record_shape_records_the_change(setup, kind):
     changes = _last_for(kind)["changes"]
     expected = {
         "on_hand": ({"qty": 5}, {"qty": 6}),
-        "recipe": ({"lines": [{"raw_material_id": "rm_w", "qty": 1, "uom": "u_w"}]},
-                   {"lines": [{"raw_material_id": "rm_w", "qty": 2, "uom": "u_w"}]}),
+        "recipe": (
+            {"lines": [{"raw_material_id": "rm_w", "qty": 1, "uom": "u_w"}]},
+            {"lines": [{"raw_material_id": "rm_w", "qty": 2, "uom": "u_w"}]},
+        ),
         "employee": ({"name": "Emp sh"}, {"name": "Emp sh (edited)"}),
     }[kind]
     assert (changes["before"], changes["after"]) == expected
@@ -928,8 +1037,7 @@ def test_an_allowed_delete_records_the_deleted_record(setup):
     _prereqs(setup, "on_hand", "del")
     assert setup.add("on_hand", _record("on_hand", "del"))[0] == 201
     assert setup.delete("on_hand", "rm_del", 1)[0] == 200
-    assert _last_for("on_hand")["changes"] == {"record": {"site_id": "site_001", "raw_material_id": "rm_del",
-                                                          "qty": 5}}
+    assert _last_for("on_hand")["changes"] == {"record": {"site_id": "site_001", "raw_material_id": "rm_del", "qty": 5}}
 
 
 def test_a_refused_write_records_what_was_submitted(setup):
@@ -953,7 +1061,9 @@ def test_unknown_and_out_of_scope_sites_are_kept_in_changes(setup):
     assert rm.add("employee", employee, site="site_002")[0] == 403
     out_of_scope = _last_for("employee")
     assert (out_of_scope["site_id"], out_of_scope["changes"]) == (
-        "site_002", {"record": employee, "site_id": "site_002"})
+        "site_002",
+        {"record": employee, "site_id": "site_002"},
+    )
     assert rm.update("employee", "emp_x", employee, 1, site="site_404")[0] == 404
     assert _last_for("employee")["changes"] == {"record": employee, "site_id": "site_404"}
     assert rm.delete("employee", "emp_x", 1, site="site_002")[0] == 403

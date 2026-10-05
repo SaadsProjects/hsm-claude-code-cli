@@ -42,12 +42,17 @@ def compute_usage_anomalies(site_id, usage, vendors):
             continue
         vendor_id, price, _, _ = _vendor_for_material(vendors, rm_id)
         cost_impact = round((actual_qty - expected_qty) * (price or 0), 2)
-        anomalies.append({
-            "site_id": site_id, "raw_material_id": rm_id,
-            "expected_qty": round(expected_qty, 2), "actual_qty": round(actual_qty, 2),
-            "variance_pct": variance_pct, "cost_impact": cost_impact,
-            "vendor_id": vendor_id,
-        })
+        anomalies.append(
+            {
+                "site_id": site_id,
+                "raw_material_id": rm_id,
+                "expected_qty": round(expected_qty, 2),
+                "actual_qty": round(actual_qty, 2),
+                "variance_pct": variance_pct,
+                "cost_impact": cost_impact,
+                "vendor_id": vendor_id,
+            }
+        )
     return anomalies
 
 
@@ -69,8 +74,7 @@ def compute_reorder_needs(site_id, forecast, on_hand_data, recipes_by_item, vend
     reorder_point = on_hand_data["reorder_points"]
     # Every stocked or policy-tracked material, not just ones with forecast use:
     # a material already below its reorder point still needs reordering.
-    all_materials = sorted({rm for day in daily_usage_by_material for rm in day}
-                           | set(on_hand) | set(reorder_point))
+    all_materials = sorted({rm for day in daily_usage_by_material for rm in day} | set(on_hand) | set(reorder_point))
 
     needs = []
     for rm_id in all_materials:
@@ -81,12 +85,17 @@ def compute_reorder_needs(site_id, forecast, on_hand_data, recipes_by_item, vend
         projected_at_delivery = current - usage_until_delivery
         if projected_at_delivery <= reorder_point.get(rm_id, 0):
             suggested_qty = max(0.0, par.get(rm_id, 0) - projected_at_delivery)
-            needs.append({
-                "site_id": site_id, "raw_material_id": rm_id, "on_hand": round(current, 1),
-                "vendor_lead_time_days": lead_time,
-                "projected_qty_at_delivery": round(projected_at_delivery, 1),
-                "suggested_order_qty": round(suggested_qty, 1),
-                "vendor_id": vendor_id, "unit_price": price,
-                "vendor_min_order_value": min_order_value,
-            })
+            needs.append(
+                {
+                    "site_id": site_id,
+                    "raw_material_id": rm_id,
+                    "on_hand": round(current, 1),
+                    "vendor_lead_time_days": lead_time,
+                    "projected_qty_at_delivery": round(projected_at_delivery, 1),
+                    "suggested_order_qty": round(suggested_qty, 1),
+                    "vendor_id": vendor_id,
+                    "unit_price": price,
+                    "vendor_min_order_value": min_order_value,
+                }
+            )
     return needs

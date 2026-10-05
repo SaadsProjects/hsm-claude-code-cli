@@ -3,6 +3,7 @@ Endpoint and integration tests for the audit trail: auditing inside the gated
 publish and PO routes (called directly and over HTTP), and the read-only
 GET /audit view over HTTP.
 """
+
 import json
 import sys
 import threading
@@ -19,8 +20,15 @@ from mock_hsm.auth import mint_token, verify_token
 from mock_hsm.server import ApiError, Handler, ThreadingHTTPServer, inventory_create_po, labor_publish_schedule
 
 LINES = [{"raw_material_id": "rm_ground_beef", "qty": 10}]
-SHIFTS = [{"employee_id": "emp_site_001_01", "date": "2026-10-05", "role": "JC-COOK",
-           "start_time": "09:00", "end_time": "17:00"}]
+SHIFTS = [
+    {
+        "employee_id": "emp_site_001_01",
+        "date": "2026-10-05",
+        "role": "JC-COOK",
+        "start_time": "09:00",
+        "end_time": "17:00",
+    }
+]
 ALL_SEEING = {"user_id": "test-auditor", "persona": "SYSTEM_ADMIN", "site_ids": [], "region_id": None}
 
 
@@ -66,25 +74,59 @@ def _break_appends(monkeypatch):
 
 # ------------------------------------------------- gated routes, direct calls
 
+
 def test_allowed_publish_is_audited_once():
     status, body = _publish(_claims("user_rm_midtown"))
-    assert (status, body) == (200, {"site_id": "site_001", "status": "PUBLISHED", "shift_count": 1,
-                                    "published_by": "user_rm_midtown"})
+    assert (status, body) == (
+        200,
+        {"site_id": "site_001", "status": "PUBLISHED", "shift_count": 1, "published_by": "user_rm_midtown"},
+    )
     [entry] = _entries()
-    assert {k: entry[k] for k in ("user_id", "persona", "session_id", "source", "action", "outcome", "kind",
-                                  "record_id", "site_id", "reason")} == {
-        "user_id": "user_rm_midtown", "persona": "RESTAURANT_MANAGER", "session_id": None,
-        "source": "claude_code_workflow", "action": "publish_schedule", "outcome": "allowed",
-        "kind": "schedule", "record_id": "site_001", "site_id": "site_001", "reason": None}
+    assert {
+        k: entry[k]
+        for k in (
+            "user_id",
+            "persona",
+            "session_id",
+            "source",
+            "action",
+            "outcome",
+            "kind",
+            "record_id",
+            "site_id",
+            "reason",
+        )
+    } == {
+        "user_id": "user_rm_midtown",
+        "persona": "RESTAURANT_MANAGER",
+        "session_id": None,
+        "source": "claude_code_workflow",
+        "action": "publish_schedule",
+        "outcome": "allowed",
+        "kind": "schedule",
+        "record_id": "site_001",
+        "site_id": "site_001",
+        "reason": None,
+    }
     assert entry["changes"] == {"shift_count": 1, "shifts": SHIFTS}
 
 
-@pytest.mark.parametrize("user, site_id, body, status, message, site_field", [
-    ("user_rm_midtown", "site_404", None, 404, "unknown site site_404", None),
-    ("user_rm_midtown", "site_002", None, 403, "persona RESTAURANT_MANAGER not scoped to site site_002", "site_002"),
-    ("admin", "site_001", None, 403, "persona cannot publish schedules", "site_001"),
-    ("user_rm_midtown", "site_001", {"shifts": "all of them"}, 400, "shifts must be a list", "site_001"),
-])
+@pytest.mark.parametrize(
+    "user, site_id, body, status, message, site_field",
+    [
+        ("user_rm_midtown", "site_404", None, 404, "unknown site site_404", None),
+        (
+            "user_rm_midtown",
+            "site_002",
+            None,
+            403,
+            "persona RESTAURANT_MANAGER not scoped to site site_002",
+            "site_002",
+        ),
+        ("admin", "site_001", None, 403, "persona cannot publish schedules", "site_001"),
+        ("user_rm_midtown", "site_001", {"shifts": "all of them"}, 400, "shifts must be a list", "site_001"),
+    ],
+)
 def test_refused_publish_is_audited_as_violation(user, site_id, body, status, message, site_field):
     claims = _admin_claims() if user == "admin" else _claims(user)
     with pytest.raises(ApiError) as exc:
@@ -92,25 +134,35 @@ def test_refused_publish_is_audited_as_violation(user, site_id, body, status, me
     assert (exc.value.status, exc.value.message) == (status, message)  # response unchanged
     [entry] = _entries()
     assert (entry["outcome"], entry["reason"], entry["record_id"], entry["site_id"]) == (
-        "violation", message, site_id, site_field)
+        "violation",
+        message,
+        site_id,
+        site_field,
+    )
     assert db.SCHEDULES == {}
 
 
-@pytest.mark.parametrize("user, body, status, site_field", [
-    ("user_regional_atl", {"site_id": 1}, 400, None),
-    ("user_regional_atl", {}, 400, None),
-    ("user_regional_atl", {"region_id": "region_xyz"}, 404, None),
-    ("user_rm_midtown", {"site_id": "site_002"}, 403, "site_002"),
-    ("user_rm_midtown", {"region_id": "region_atl"}, 403, None),
-    ("user_regional_atl", {"site_id": "site_001", "vendor_id": "vendor_nope"}, 400, "site_001"),
-])
+@pytest.mark.parametrize(
+    "user, body, status, site_field",
+    [
+        ("user_regional_atl", {"site_id": 1}, 400, None),
+        ("user_regional_atl", {}, 400, None),
+        ("user_regional_atl", {"region_id": "region_xyz"}, 404, None),
+        ("user_rm_midtown", {"site_id": "site_002"}, 403, "site_002"),
+        ("user_rm_midtown", {"region_id": "region_atl"}, 403, None),
+        ("user_regional_atl", {"site_id": "site_001", "vendor_id": "vendor_nope"}, 400, "site_001"),
+    ],
+)
 def test_refused_po_is_audited_as_violation(user, body, status, site_field):
     with pytest.raises(ApiError) as exc:
         _po(_claims(user), **body)
     assert exc.value.status == status
     [entry] = _entries()
     assert (entry["action"], entry["outcome"], entry["reason"]) == (
-        "submit_purchase_order", "violation", exc.value.message)
+        "submit_purchase_order",
+        "violation",
+        exc.value.message,
+    )
     assert (entry["kind"], entry["record_id"], entry["site_id"]) == ("purchase_order", None, site_field)
     assert entry["changes"]["vendor_id"] == body.get("vendor_id", "vendor_protein_co")
     assert db.PURCHASE_ORDERS == []
@@ -134,9 +186,17 @@ def test_direct_po_call_is_audited_with_its_po_id():
     assert status == 201
     [entry] = _entries()
     assert (entry["action"], entry["outcome"], entry["record_id"], entry["site_id"]) == (
-        "submit_purchase_order", "allowed", po["po_id"], None)  # region-level PO: no site
-    assert entry["changes"] == {"vendor_id": "vendor_protein_co", "site_id": None, "region_id": "region_atl",
-                                "line_items": LINES}
+        "submit_purchase_order",
+        "allowed",
+        po["po_id"],
+        None,
+    )  # region-level PO: no site
+    assert entry["changes"] == {
+        "vendor_id": "vendor_protein_co",
+        "site_id": None,
+        "region_id": "region_atl",
+        "line_items": LINES,
+    }
 
     _, site_po = _po(_claims("user_rm_midtown"), site_id="site_001")
     assert (_entries()[-1]["record_id"], _entries()[-1]["site_id"]) == (site_po["po_id"], "site_001")
@@ -154,9 +214,11 @@ def test_oversized_refusal_is_still_audited_with_its_usual_response():
 
 def test_unwritable_audit_store_refuses_and_applies_nothing(monkeypatch):
     _break_appends(monkeypatch)
-    for call in (lambda: _publish(_claims("user_rm_midtown")),
-                 lambda: _po(_claims("user_rm_midtown"), site_id="site_001"),
-                 lambda: _publish(_claims("user_rm_midtown"), "site_002")):  # a refusal becomes 503 too
+    for call in (
+        lambda: _publish(_claims("user_rm_midtown")),
+        lambda: _po(_claims("user_rm_midtown"), site_id="site_001"),
+        lambda: _publish(_claims("user_rm_midtown"), "site_002"),
+    ):  # a refusal becomes 503 too
         with pytest.raises(ApiError) as exc:
             call()
         assert (exc.value.status, exc.value.message) == (503, "audit unavailable")
@@ -207,6 +269,7 @@ def test_failed_compensating_entry_is_logged(monkeypatch, capsys):
 
 # --------------------------------------------------------------- over HTTP
 
+
 @pytest.fixture
 def base_url():
     server = ThreadingHTTPServer(("127.0.0.1", 0), Handler)  # ephemeral port
@@ -240,10 +303,20 @@ def test_entry_count_matches_attempt_count_over_http(base_url):
         ("POST", "/labor/sites/site_002/schedules/publish", "user_rm_midtown", {"shifts": SHIFTS}, 403),
         ("POST", "/labor/sites/site_nope/schedules/publish", "user_regional_atl", {"shifts": SHIFTS}, 404),
         ("POST", "/labor/sites/site_002/schedules/publish", "user_regional_atl", {"shifts": {}}, 400),
-        ("POST", "/inventory/purchase-orders", "user_regional_atl",
-         {"vendor_id": "vendor_protein_co", "line_items": LINES, "region_id": "region_atl"}, 201),
-        ("POST", "/inventory/purchase-orders", "user_rm_midtown",
-         {"vendor_id": "vendor_protein_co", "line_items": LINES, "region_id": "region_atl"}, 403),
+        (
+            "POST",
+            "/inventory/purchase-orders",
+            "user_regional_atl",
+            {"vendor_id": "vendor_protein_co", "line_items": LINES, "region_id": "region_atl"},
+            201,
+        ),
+        (
+            "POST",
+            "/inventory/purchase-orders",
+            "user_rm_midtown",
+            {"vendor_id": "vendor_protein_co", "line_items": LINES, "region_id": "region_atl"},
+            403,
+        ),
         ("POST", "/inventory/purchase-orders", "user_rm_midtown", {"vendor_id": "x", "site_id": "site_001"}, 400),
     ]
     for method, path, user, body, status in attempts:
@@ -251,8 +324,10 @@ def test_entry_count_matches_attempt_count_over_http(base_url):
 
     # Rejected by the dispatcher before any route runs: never audited (BR3.1).
     assert _http(base_url, "POST", "/inventory/purchase-orders", None, {"vendor_id": "x"})[0] == 401
-    assert _http(base_url, "POST", "/labor/sites/site_001/schedules/publish", "user_rm_midtown",
-                 raw=b"{not json")[0] == 400
+    assert (
+        _http(base_url, "POST", "/labor/sites/site_001/schedules/publish", "user_rm_midtown", raw=b"{not json")[0]
+        == 400
+    )
 
     entries = _entries()
     assert len(entries) == len(attempts)
@@ -261,11 +336,14 @@ def test_entry_count_matches_attempt_count_over_http(base_url):
 
 def test_unwritable_audit_store_gives_503_over_http(base_url, monkeypatch):
     _break_appends(monkeypatch)
-    status, body = _http(base_url, "POST", "/labor/sites/site_001/schedules/publish", "user_rm_midtown",
-                         {"shifts": SHIFTS})
+    status, body = _http(
+        base_url, "POST", "/labor/sites/site_001/schedules/publish", "user_rm_midtown", {"shifts": SHIFTS}
+    )
     assert (status, body) == (503, {"error": "audit unavailable"})
     assert _http(base_url, "GET", "/labor/sites/site_001/schedules", "user_rm_midtown") == (
-        200, {"site_id": "site_001", "published": []})
+        200,
+        {"site_id": "site_001", "published": []},
+    )
     assert _http(base_url, "GET", "/audit", "user_regional_atl") == (503, {"error": "audit unavailable"})
 
 
@@ -276,27 +354,67 @@ def test_unreadable_trail_refuses_audited_operations_but_not_reads(base_url, aud
     audit.append({"user_id": "u", "source": "dashboard", "action": "add", "outcome": "allowed"})
     audit.configure()  # restart finds the corrupt middle line
 
-    assert _http(base_url, "POST", "/inventory/purchase-orders", "user_regional_atl",
-                 {"vendor_id": "vendor_protein_co", "line_items": LINES, "region_id": "region_atl"})[0] == 503
+    assert (
+        _http(
+            base_url,
+            "POST",
+            "/inventory/purchase-orders",
+            "user_regional_atl",
+            {"vendor_id": "vendor_protein_co", "line_items": LINES, "region_id": "region_atl"},
+        )[0]
+        == 503
+    )
     assert _http(base_url, "GET", "/audit", "user_regional_atl")[0] == 503
     assert _http(base_url, "GET", "/admin/sites", "user_regional_atl")[0] == 200
     assert db.PURCHASE_ORDERS == []
 
 
 def _plant_view_entries():
-    for site, user in [("site_001", "user_rm_midtown"), ("site_002", "user_regional_atl"),
-                       ("site_003", "user_regional_atl"), (None, "user_regional_atl")]:
-        audit.append({"user_id": user, "source": "dashboard", "action": "update", "outcome": "allowed",
-                      "kind": "on_hand", "record_id": "rm_bun", "site_id": site})
+    for site, user in [
+        ("site_001", "user_rm_midtown"),
+        ("site_002", "user_regional_atl"),
+        ("site_003", "user_regional_atl"),
+        (None, "user_regional_atl"),
+    ]:
+        audit.append(
+            {
+                "user_id": user,
+                "source": "dashboard",
+                "action": "update",
+                "outcome": "allowed",
+                "kind": "on_hand",
+                "record_id": "rm_bun",
+                "site_id": site,
+            }
+        )
     # "unknown" entries (no session): one about site_001 data, one about shared
     # data (no site), one about another site's data.
     for kind, site in [("on_hand", "site_001"), ("uom", None), ("on_hand", "site_002")]:
-        audit.append({"user_id": "unknown", "source": "dashboard", "action": "update", "outcome": "violation",
-                      "reason": "no session", "kind": kind, "record_id": "rm_bun", "site_id": site})
+        audit.append(
+            {
+                "user_id": "unknown",
+                "source": "dashboard",
+                "action": "update",
+                "outcome": "violation",
+                "reason": "no session",
+                "kind": kind,
+                "record_id": "rm_bun",
+                "site_id": site,
+            }
+        )
 
 
-@pytest.mark.parametrize("query", ["", "?site_id=site_002", "?region_id=region_atl", "?persona=SYSTEM_ADMIN",
-                                   "?user_id=unknown&site_ids=site_002", "?limit=500"])
+@pytest.mark.parametrize(
+    "query",
+    [
+        "",
+        "?site_id=site_002",
+        "?region_id=region_atl",
+        "?persona=SYSTEM_ADMIN",
+        "?user_id=unknown&site_ids=site_002",
+        "?limit=500",
+    ],
+)
 def test_restaurant_manager_view_cannot_be_widened(base_url, query):
     _plant_view_entries()
     status, page = _http(base_url, "GET", f"/audit{query}", "user_rm_midtown")
@@ -304,7 +422,9 @@ def test_restaurant_manager_view_cannot_be_widened(base_url, query):
     # BR4.2 / NFR4.3: its own site's entries, including the "unknown" one about
     # site_001 data; never shared data or another site, whatever the query.
     assert [(e["site_id"], e["user_id"]) for e in page["entries"]] == [
-        ("site_001", "unknown"), ("site_001", "user_rm_midtown")]
+        ("site_001", "unknown"),
+        ("site_001", "user_rm_midtown"),
+    ]
     assert (page["total"], page["limit"], page["next_before"]) == (2, 50, None)
 
 
@@ -332,7 +452,10 @@ def test_any_well_formed_before_is_accepted_over_http(base_url):
     assert status == 200 and len(page["entries"]) == page["total"] == 7
     status, page = _http(base_url, "GET", "/audit?before=000000000004", "user_regional_atl")
     assert status == 200 and [e["entry_id"] for e in page["entries"]] == [
-        "000000000003", "000000000002", "000000000001"]
+        "000000000003",
+        "000000000002",
+        "000000000001",
+    ]
     status, page = _http(base_url, "GET", "/audit?before=000000000002", "user_rm_midtown")  # a hidden id
     assert (status, [e["entry_id"] for e in page["entries"]], page["total"]) == (200, ["000000000001"], 2)
 

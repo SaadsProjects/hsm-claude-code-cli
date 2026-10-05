@@ -1,0 +1,259 @@
+# Continuous integration: every gate a change must pass before it can merge
+# into main. Design: aidlc/spaces/default/intents/261004-dashboard-deploy-pipelin/
+# construction/infrastructure-design/cicd-pipeline.md. Third-party actions are
+# pinned to full commit SHAs (Dependabot keeps them current); jobs start from
+# no permissions and get only `contents: read`.
+name: ci
+
+on:
+  pull_request:
+    branches: [main]
+  push:
+    branches: [main]
+  schedule:
+    - cron: "0 3 * * *"  # nightly: browser tests
+  workflow_dispatch:
+
+permissions: {}
+
+concurrency:
+  group: ci-${{ github.ref }}
+  cancel-in-progress: ${{ github.event_name == 'pull_request' }}
+
+env:
+  PIP_DISABLE_PIP_VERSION_CHECK: "1"
+  GATE_PYTHON: "3.14"
+
+jobs:
+  lint:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 10
+    permissions:
+      contents: read
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+      - uses: actions/setup-python@5fda3b95a4ea91299a34e894583c3862153e4b97 # v7.0.0
+        with:
+          python-version: ${{ env.GATE_PYTHON }}
+          cache: pip
+          cache-dependency-path: requirements-dev.txt
+      - run: pip install --require-hashes -r requirements-dev.txt
+      - run: ruff --version
+      - run: ruff check .
+      - run: ruff format --check .
+
+  workflow-lint:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 10
+    permissions:
+      contents: read
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+      - name: Install actionlint 1.7.12 (checksum verified)
+        run: |
+          curl -fsSLo actionlint.tgz https://github.com/rhysd/actionlint/releases/download/v1.7.12/actionlint_1.7.12_linux_amd64.tar.gz
+          echo "8aca8db96f1b94770f1b0d72b6dddcb1ebb8123cb3712530b08cc387b349a3d8  actionlint.tgz" | sha256sum -c -
+          tar -xzf actionlint.tgz actionlint
+      - run: ./actionlint -color
+      - run: python3 scripts/check_workflows.py .github/workflows
+
+  secrets:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 10
+    permissions:
+      contents: read
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          fetch-depth: 0
+      - name: Install gitleaks 8.30.1 (checksum verified)
+        run: |
+          curl -fsSLo gitleaks.tgz https://github.com/gitleaks/gitleaks/releases/download/v8.30.1/gitleaks_8.30.1_linux_x64.tar.gz
+          echo "551f6fc83ea457d62a0d98237cbad105af8d557003051f41f3e7ca7b3f2470eb  gitleaks.tgz" | sha256sum -c -
+          tar -xzf gitleaks.tgz gitleaks
+      - run: ./gitleaks git --config .gitleaks.toml --redact --no-banner .
+      - run: python3 scripts/check_burned_secret.py
+
+  audit:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 10
+    permissions:
+      contents: read
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+      - uses: actions/setup-python@5fda3b95a4ea91299a34e894583c3862153e4b97 # v7.0.0
+        with:
+          python-version: ${{ env.GATE_PYTHON }}
+          cache: pip
+          cache-dependency-path: requirements-dev.txt
+      - run: pip install --require-hashes -r requirements-dev.txt
+      - run: python scripts/check_exceptions.py security-exceptions.toml
+      - run: sh scripts/run_pip_audit.sh audit.json
+      - run: python scripts/filter_audit.py audit.json --exceptions security-exceptions.toml
+
+  sast:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 10
+    permissions:
+      contents: read
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+      - uses: actions/setup-python@5fda3b95a4ea91299a34e894583c3862153e4b97 # v7.0.0
+        with:
+          python-version: ${{ env.GATE_PYTHON }}
+          cache: pip
+          cache-dependency-path: requirements-dev.txt
+      - run: pip install --require-hashes -r requirements-dev.txt
+      # bandit exits 1 on any finding; the filter decides (high severity blocks).
+      - run: bandit -q --ignore-nosec -r agents dashboard mcp_server mock_hsm .claude/hooks scripts -f json -o bandit.json || [ $? -eq 1 ]
+      - run: python scripts/filter_bandit.py bandit.json --exceptions security-exceptions.toml
+
+  lock-check:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 10
+    permissions:
+      contents: read
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+      - uses: astral-sh/setup-uv@c18668ad3cf93ea998bef934396af7bb5c839dc7 # v10.2.0
+        with:
+          version: "0.12.15"
+      # Start from the committed locks so uv keeps their pins and only changes
+      # what an edit to the .in files forces; compiling from scratch would pick
+      # up every new upstream release and fail unrelated PRs.
+      - name: Lockfiles match their inputs
+        run: |
+          cp requirements.txt /tmp/requirements.txt
+          cp requirements-dev.txt /tmp/requirements-dev.txt
+          uv pip compile requirements.in --universal --generate-hashes --python-version 3.10 --no-header -o /tmp/requirements.txt
+          uv pip compile requirements-dev.in --universal --generate-hashes --python-version 3.10 --no-header -o /tmp/requirements-dev.txt
+          diff -u requirements.txt /tmp/requirements.txt
+          diff -u requirements-dev.txt /tmp/requirements-dev.txt
+
+  matrix:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 5
+    outputs:
+      python: ${{ steps.py.outputs.python }}
+    steps:
+      - id: py
+        env:
+          HOSTED_PYTHON: ${{ vars.HOSTED_PYTHON }}
+        run: |
+          list='["3.10", "3.14"]'
+          if [ -n "$HOSTED_PYTHON" ] && [ "$HOSTED_PYTHON" != "3.10" ] && [ "$HOSTED_PYTHON" != "3.14" ]; then
+            list="[\"3.10\", \"3.14\", \"$HOSTED_PYTHON\"]"
+          fi
+          echo "python=$list" >> "$GITHUB_OUTPUT"
+
+  tests:
+    needs: matrix
+    name: tests (${{ matrix.python }})
+    runs-on: ubuntu-24.04
+    timeout-minutes: 15
+    permissions:
+      contents: read
+    strategy:
+      fail-fast: false
+      matrix:
+        python: ${{ fromJSON(needs.matrix.outputs.python) }}
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          fetch-depth: 0  # the floor checks compare .test-floor with the base branch
+      - uses: actions/setup-python@5fda3b95a4ea91299a34e894583c3862153e4b97 # v7.0.0
+        with:
+          python-version: ${{ matrix.python }}
+          cache: pip
+          cache-dependency-path: requirements-dev.txt
+      - run: pip install --require-hashes -r requirements-dev.txt
+      # Plain `pytest tests/`, never an unrelated -m: any -m turns off the
+      # default perf skip (tests/conftest.py). A failing test is retried once.
+      - name: Test suite
+        if: matrix.python != env.GATE_PYTHON
+        timeout-minutes: 5
+        run: python -m pytest tests/ -q --reruns 1 --junitxml=junit.xml
+      - name: Test suite with coverage
+        if: matrix.python == env.GATE_PYTHON
+        timeout-minutes: 5
+        run: |
+          coverage run -m pytest tests/ -q --reruns 1 --junitxml=junit.xml
+          coverage combine -q
+          coverage json -q
+      - name: Test floor
+        env:
+          BASE_REF: ${{ github.event_name == 'pull_request' && format('origin/{0}', github.base_ref) || '' }}
+        run: python scripts/test_floor.py junit.xml ${BASE_REF:+--base-ref "$BASE_REF"}
+      - name: Summary
+        if: always()
+        env:
+          PY: ${{ matrix.python }}
+          SHA: ${{ github.sha }}
+        run: |
+          extra=()
+          if [ -f coverage.json ]; then extra=(--coverage-json coverage.json --coverage-floor .coverage-floor); fi
+          if [ -f junit.xml ]; then
+            python scripts/job_summary.py ci --python "$PY" --sha "$SHA" junit.xml "${extra[@]}" >> "$GITHUB_STEP_SUMMARY"
+          fi
+      - uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
+        if: matrix.python == env.GATE_PYTHON
+        with:
+          name: coverage
+          path: coverage.json
+          retention-days: 7
+
+  coverage-gate:
+    needs: tests
+    runs-on: ubuntu-24.04
+    timeout-minutes: 5
+    permissions:
+      contents: read
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          fetch-depth: 0
+      - uses: actions/download-artifact@3e5f45b2cfb9172054b4087a40e8e0b5a5461e7c # v8.0.1
+        with:
+          name: coverage
+      - name: Coverage floor and 80% gate
+        env:
+          BASE_REF: ${{ github.event_name == 'pull_request' && format('origin/{0}', github.base_ref) || '' }}
+        run: python3 scripts/coverage_gate.py --coverage-json coverage.json --floor-file .coverage-floor ${BASE_REF:+--base-ref "$BASE_REF"}
+
+  # Always runs so it can be a required check (a required check that never
+  # reports would block every PR); it no-ops when no browser test is affected.
+  browser-tests:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 15
+    permissions:
+      contents: read
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          fetch-depth: 0
+      - id: need
+        env:
+          EVENT: ${{ github.event_name }}
+          BASE_REF: ${{ github.base_ref }}
+        run: |
+          if [ "$EVENT" != "pull_request" ]; then echo "run=true" >> "$GITHUB_OUTPUT"; exit 0; fi
+          changed=$(git diff --name-only "origin/$BASE_REF...HEAD")
+          if echo "$changed" | grep -Eq '^(scripts/postdeploy_check\.py|dashboard/markers\.py|dashboard/auth_gate\.py|agents/build_info\.py|tests/.*browser.*)$'; then
+            echo "run=true" >> "$GITHUB_OUTPUT"
+          else
+            echo "run=false" >> "$GITHUB_OUTPUT"
+            echo "Browser tests not needed: no browser-check file changed." >> "$GITHUB_STEP_SUMMARY"
+          fi
+      - uses: actions/setup-python@5fda3b95a4ea91299a34e894583c3862153e4b97 # v7.0.0
+        if: steps.need.outputs.run == 'true'
+        with:
+          python-version: ${{ env.GATE_PYTHON }}
+          cache: pip
+          cache-dependency-path: requirements-dev.txt
+      - if: steps.need.outputs.run == 'true'
+        run: pip install --require-hashes -r requirements-dev.txt
+      # Playwright and Chromium arrive with the post-deploy check (follow-up
+      # work). Until a browser test exists, pytest exits 5 ("no tests ran"),
+      # which is a pass here.
+      - if: steps.need.outputs.run == 'true'
+        run: python -m pytest tests/ -m browser -q || [ $? -eq 5 ]

@@ -8,6 +8,7 @@ Every test gets its own audit file from the autouse ``audit_path`` fixture in
 conftest.py. The clock is injected with ``configure(clock=...)``; nothing
 sleeps for real time.
 """
+
 import json
 import os
 import signal
@@ -29,8 +30,12 @@ PROJECT_ROOT = Path(__file__).resolve().parent.parent
 
 T0 = datetime(2026, 9, 30, 12, 0, tzinfo=timezone.utc)
 
-REGIONAL = {"user_id": "user_regional_atl", "persona": "REGIONAL_MANAGER",
-            "site_ids": ["site_001", "site_002", "site_003"], "region_id": "region_atl"}
+REGIONAL = {
+    "user_id": "user_regional_atl",
+    "persona": "REGIONAL_MANAGER",
+    "site_ids": ["site_001", "site_002", "site_003"],
+    "region_id": "region_atl",
+}
 RM = {"user_id": "user_rm_midtown", "persona": "RESTAURANT_MANAGER", "site_ids": ["site_001"], "region_id": None}
 ADMIN = {"user_id": "user_dev_tester", "persona": "SYSTEM_ADMIN", "site_ids": [], "region_id": None}
 
@@ -44,9 +49,18 @@ class FakeClock:
 
 
 def _entry(**overrides):
-    entry = {"user_id": "user_rm_midtown", "persona": "RESTAURANT_MANAGER", "session_id": "sess-1",
-             "source": "dashboard", "action": "add", "outcome": "allowed", "kind": "employee",
-             "record_id": "emp_1", "site_id": "site_001", "changes": {"name": "Ana"}}
+    entry = {
+        "user_id": "user_rm_midtown",
+        "persona": "RESTAURANT_MANAGER",
+        "session_id": "sess-1",
+        "source": "dashboard",
+        "action": "add",
+        "outcome": "allowed",
+        "kind": "employee",
+        "record_id": "emp_1",
+        "site_id": "site_001",
+        "changes": {"name": "Ana"},
+    }
     entry.update(overrides)
     return entry
 
@@ -67,10 +81,22 @@ def _stored_lines(path):
 
 
 def _legacy_entry(entry_id, timestamp=T0 - timedelta(days=1), site_id="site_001"):
-    return {"entry_id": f"{entry_id:012d}", "timestamp": timestamp.isoformat(), "user_id": "user_rm_midtown",
-            "persona": "RESTAURANT_MANAGER", "session_id": None, "source": "claude_code_workflow",
-            "action": "publish_schedule", "outcome": "allowed", "kind": "schedule", "record_id": site_id,
-            "site_id": site_id, "changes": None, "reason": None, "file_row": None}
+    return {
+        "entry_id": f"{entry_id:012d}",
+        "timestamp": timestamp.isoformat(),
+        "user_id": "user_rm_midtown",
+        "persona": "RESTAURANT_MANAGER",
+        "session_id": None,
+        "source": "claude_code_workflow",
+        "action": "publish_schedule",
+        "outcome": "allowed",
+        "kind": "schedule",
+        "record_id": site_id,
+        "site_id": site_id,
+        "changes": None,
+        "reason": None,
+        "file_row": None,
+    }
 
 
 def _error_lines(err):
@@ -78,6 +104,7 @@ def _error_lines(err):
 
 
 # ============================================================ storage layer
+
 
 def test_round_trip_after_restart_single_and_batch(audit_path):
     single = audit.append(_entry(record_id="emp_a"))
@@ -87,7 +114,9 @@ def test_round_trip_after_restart_single_and_batch(audit_path):
     # One line per call, each carrying the high-water mark after it (NFR3.15).
     lines = _stored_lines(audit_path)
     assert [(line["hwm"], [e["entry_id"] for e in line["entries"]]) for line in lines] == [
-        (1, ["000000000001"]), (4, ["000000000002", "000000000003", "000000000004"])]
+        (1, ["000000000001"]),
+        (4, ["000000000002", "000000000003", "000000000004"]),
+    ]
 
     audit.configure()  # restart on the same file (NFR3.1)
     entries = audit.page(REGIONAL)["entries"]
@@ -127,22 +156,25 @@ def test_newline_terminated_corrupt_line_makes_trail_unavailable(audit_path, cap
 
     audit.configure()
     assert _error_lines(capsys.readouterr().err) == [
-        f"[mock-hsm] ERROR audit: trail unavailable, unreadable line {line_no} in {audit_path}"]
-    for call in (lambda: audit.append(_entry()), lambda: audit.append_batch([_entry()]),
-                 lambda: audit.page(REGIONAL)):
+        f"[mock-hsm] ERROR audit: trail unavailable, unreadable line {line_no} in {audit_path}"
+    ]
+    for call in (lambda: audit.append(_entry()), lambda: audit.append_batch([_entry()]), lambda: audit.page(REGIONAL)):
         with pytest.raises(audit.AuditUnavailable):
             call()
     assert audit_path.read_bytes() == before  # never repaired or cut off by the module
 
 
-@pytest.mark.parametrize("bad_line", [
-    b"",                                                         # an empty line
-    b"[1, 2, 3]",                                                # not an object
-    b'{"hwm": 9, "entries": [{"entry_id": "000000000009"}]}',     # entry without a timestamp
-    b'{"hwm": 1, "entries": [' + json.dumps(_legacy_entry(5)).encode() + b"]}",  # id above its hwm
-    b'{"hwm": 9, "entries": [' + json.dumps(_legacy_entry(1)).encode() + b"]}",  # id not increasing
-    b'{"_meta": {"next_id": 7}}',                                # metadata line is only valid first
-])
+@pytest.mark.parametrize(
+    "bad_line",
+    [
+        b"",  # an empty line
+        b"[1, 2, 3]",  # not an object
+        b'{"hwm": 9, "entries": [{"entry_id": "000000000009"}]}',  # entry without a timestamp
+        b'{"hwm": 1, "entries": [' + json.dumps(_legacy_entry(5)).encode() + b"]}",  # id above its hwm
+        b'{"hwm": 9, "entries": [' + json.dumps(_legacy_entry(1)).encode() + b"]}",  # id not increasing
+        b'{"_meta": {"next_id": 7}}',  # metadata line is only valid first
+    ],
+)
 def test_unreadable_lines_in_either_layout(audit_path, bad_line):
     audit.append(_entry())
     with open(audit_path, "ab") as f:
@@ -154,8 +186,16 @@ def test_unreadable_lines_in_either_layout(audit_path, bad_line):
 
 def test_old_layout_file_loads_and_is_rewritten_in_the_new_layout(audit_path, capsys):
     legacy_meta = b'{"_meta": {"next_id":           41}}'  # the old fixed-width metadata line
-    audit_path.write_bytes(b"\n".join([legacy_meta, json.dumps(_legacy_entry(30)).encode(),
-                                       json.dumps(_legacy_entry(33, site_id="site_002")).encode()]) + b"\n")
+    audit_path.write_bytes(
+        b"\n".join(
+            [
+                legacy_meta,
+                json.dumps(_legacy_entry(30)).encode(),
+                json.dumps(_legacy_entry(33, site_id="site_002")).encode(),
+            ]
+        )
+        + b"\n"
+    )
     capsys.readouterr()
 
     audit.configure(clock=FakeClock(T0))
@@ -234,8 +274,12 @@ _KILL_SCRIPT = textwrap.dedent("""
 
 def test_append_survives_sigkill(tmp_path):
     path = tmp_path / "killed" / "audit.jsonl"
-    proc = subprocess.Popen([sys.executable, "-c", _KILL_SCRIPT, str(PROJECT_ROOT), str(path)],
-                            stdout=subprocess.PIPE, stderr=subprocess.DEVNULL, text=True)
+    proc = subprocess.Popen(
+        [sys.executable, "-c", _KILL_SCRIPT, str(PROJECT_ROOT), str(path)],
+        stdout=subprocess.PIPE,
+        stderr=subprocess.DEVNULL,
+        text=True,
+    )
     try:
         entry_id = proc.stdout.readline().strip()
         proc.send_signal(signal.SIGKILL)
@@ -268,7 +312,8 @@ def test_purge_failure_before_the_swap_keeps_the_original_file(audit_path, monke
         recent = audit.append(_entry(record_id="recent"))  # the due purge fails first; the append still works
     assert _error_lines(capsys.readouterr().err) == [
         "[mock-hsm] ERROR audit: purge failed before swap, replacing file (rename refused); "
-        "old file kept, trail available, retry in 24 hours"]
+        "old file kept, trail available, retry in 24 hours"
+    ]
     assert audit_path.read_bytes().startswith(original)
     assert not audit._tmp_path(audit_path).exists()
     assert _all_ids() == [recent, old]
@@ -294,12 +339,14 @@ def test_purge_failure_after_the_swap_fails_closed(audit_path, monkeypatch, caps
     with pytest.raises(audit.AuditUnavailable):
         audit.append(_entry())
     assert _error_lines(capsys.readouterr().err) == [
-        "[mock-hsm] ERROR audit: purge failed after swap, reopening file (I/O error); trail unavailable"]
+        "[mock-hsm] ERROR audit: purge failed after swap, reopening file (I/O error); trail unavailable"
+    ]
     with pytest.raises(audit.AuditUnavailable):
         audit.page(REGIONAL)
 
 
 # =========================================================== business logic
+
 
 def test_lazy_initialization_on_first_use(audit_path, monkeypatch):
     monkeypatch.setattr(audit._current, "state", None)
@@ -307,14 +354,29 @@ def test_lazy_initialization_on_first_use(audit_path, monkeypatch):
     assert audit_path.exists() and audit_path.stat().st_mode & 0o777 == 0o600
 
 
-@pytest.mark.parametrize("overrides", [
-    {"user_id": None}, {"user_id": ""}, {"source": None}, {"action": None}, {"outcome": None},
-    {"source": "cli"}, {"action": "rename"}, {"outcome": "maybe"},
-    {"outcome": "violation", "reason": None}, {"outcome": "violation", "reason": "  "},
-    {"action": "login", "outcome": "violation", "reason": "bad password"},
-    {"persona_site_ids": ["site_001"]}, {"changes": ["not", "an", "object"]},
-    {"file_row": 0}, {"file_row": True}, {"file_row": "3"}, {"site_id": 7}, {"reason": b"bytes"},
-])
+@pytest.mark.parametrize(
+    "overrides",
+    [
+        {"user_id": None},
+        {"user_id": ""},
+        {"source": None},
+        {"action": None},
+        {"outcome": None},
+        {"source": "cli"},
+        {"action": "rename"},
+        {"outcome": "maybe"},
+        {"outcome": "violation", "reason": None},
+        {"outcome": "violation", "reason": "  "},
+        {"action": "login", "outcome": "violation", "reason": "bad password"},
+        {"persona_site_ids": ["site_001"]},
+        {"changes": ["not", "an", "object"]},
+        {"file_row": 0},
+        {"file_row": True},
+        {"file_row": "3"},
+        {"site_id": 7},
+        {"reason": b"bytes"},
+    ],
+)
 def test_incomplete_entries_are_refused(audit_path, overrides):
     with pytest.raises(audit.InvalidEntry):
         audit.append(_entry(**overrides))
@@ -332,12 +394,17 @@ def test_batch_must_be_a_non_empty_list(audit_path, entries):
 
 
 def test_unknown_session_less_write_is_recorded(audit_path):
-    entry_id = audit.append(_entry(user_id=audit.UNKNOWN_USER, persona=None, session_id=None,
-                                   outcome="violation", reason="no session"))
+    entry_id = audit.append(
+        _entry(user_id=audit.UNKNOWN_USER, persona=None, session_id=None, outcome="violation", reason="no session")
+    )
     [stored] = audit.page(REGIONAL)["entries"]
     assert stored["entry_id"] == entry_id
     assert (stored["user_id"], stored["persona"], stored["session_id"], stored["outcome"]) == (
-        "unknown", None, None, "violation")
+        "unknown",
+        None,
+        None,
+        "violation",
+    )
 
 
 def test_developer_tester_keeps_its_own_user_id_uncut(audit_path):
@@ -346,8 +413,11 @@ def test_developer_tester_keeps_its_own_user_id_uncut(audit_path):
     audit.append(_entry(user_id="user_dev_tester", persona="SYSTEM_ADMIN"))
     audit.append(_entry(user_id=long_id, persona="SYSTEM_ADMIN", session_id="s" * 2_000))
     users = [(e["user_id"], e["persona"]) for e in audit.page(REGIONAL)["entries"]]
-    assert users == [(long_id, "SYSTEM_ADMIN"), ("user_dev_tester", "SYSTEM_ADMIN"),
-                     ("user_regional_atl", "REGIONAL_MANAGER")]
+    assert users == [
+        (long_id, "SYSTEM_ADMIN"),
+        ("user_dev_tester", "SYSTEM_ADMIN"),
+        ("user_regional_atl", "REGIONAL_MANAGER"),
+    ]
     assert audit.page(REGIONAL)["entries"][0]["session_id"] == "s" * 2_000
 
 
@@ -365,8 +435,9 @@ def test_oversized_changes_are_truncated_to_the_marker(audit_path):
 
 
 def test_long_text_fields_are_cut_to_1024_characters(audit_path):
-    audit.append(_entry(outcome="violation", reason="r" * 5_000, site_id="s" * 5_000,
-                        kind="k" * 5_000, record_id="i" * 5_000))
+    audit.append(
+        _entry(outcome="violation", reason="r" * 5_000, site_id="s" * 5_000, kind="k" * 5_000, record_id="i" * 5_000)
+    )
     [stored] = audit.page(REGIONAL)["entries"]
     assert [len(stored[f]) for f in ("reason", "site_id", "kind", "record_id")] == [audit.TEXT_MAX_CHARS] * 4
     assert stored["changes"] == {"name": "Ana"}  # fits once the text is cut, so changes is kept
@@ -460,7 +531,10 @@ def test_lazy_purge_runs_once_24_hours_have_passed(audit_path):
     third = audit.append(_entry(record_id="third"))  # due: the purge runs first, then the append
     # Rewritten before the third entry was added: metadata line, entry 2, then entry 3.
     assert [(line["hwm"], [e["entry_id"] for e in line["entries"]]) for line in _stored_lines(audit_path)] == [
-        (2, []), (2, ["000000000002"]), (3, [third])]
+        (2, []),
+        (2, ["000000000002"]),
+        (3, [third]),
+    ]
     assert _all_ids() == [third, "000000000002"]
 
 
@@ -513,14 +587,21 @@ def test_concurrent_appends_are_serialized(audit_path):
 
 
 def _seed_visibility_entries():
-    unknown = {"user_id": audit.UNKNOWN_USER, "persona": None, "session_id": None, "outcome": "violation",
-               "reason": "no session"}
+    unknown = {
+        "user_id": audit.UNKNOWN_USER,
+        "persona": None,
+        "session_id": None,
+        "outcome": "violation",
+        "reason": "no session",
+    }
     return {
         "rm_site1": audit.append(_entry()),
-        "regional_site2": audit.append(_entry(user_id="user_regional_atl", persona="REGIONAL_MANAGER",
-                                              site_id="site_002")),
-        "regional_region_po": audit.append(_entry(user_id="user_regional_atl", persona="REGIONAL_MANAGER",
-                                                  site_id=None, kind="purchase_order")),
+        "regional_site2": audit.append(
+            _entry(user_id="user_regional_atl", persona="REGIONAL_MANAGER", site_id="site_002")
+        ),
+        "regional_region_po": audit.append(
+            _entry(user_id="user_regional_atl", persona="REGIONAL_MANAGER", site_id=None, kind="purchase_order")
+        ),
         "unknown_site1": audit.append(_entry(**unknown)),
         "unknown_shared": audit.append(_entry(**unknown, kind="uom", site_id=None)),
         "unknown_site2": audit.append(_entry(**unknown, site_id="site_002")),
@@ -529,19 +610,37 @@ def _seed_visibility_entries():
     }
 
 
-EVERYTHING = {"rm_site1", "regional_site2", "regional_region_po", "unknown_site1", "unknown_shared",
-              "unknown_site2", "rm_login", "dev_site3"}
+EVERYTHING = {
+    "rm_site1",
+    "regional_site2",
+    "regional_region_po",
+    "unknown_site1",
+    "unknown_shared",
+    "unknown_site2",
+    "rm_login",
+    "dev_site3",
+}
 
 
-@pytest.mark.parametrize("viewer, expected", [
-    (REGIONAL, EVERYTHING),
-    (ADMIN, EVERYTHING),
-    # BR4.2: the same site/own test for every entry, "unknown" ones included.
-    (RM, {"rm_site1", "unknown_site1", "rm_login"}),
-    ({"user_id": "user_rm_buckhead", "persona": "RESTAURANT_MANAGER", "site_ids": ["site_002"],
-      "region_id": None}, {"regional_site2", "unknown_site2"}),
-    ({"user_id": "nobody", "persona": "RESTAURANT_MANAGER", "site_ids": None, "region_id": None}, set()),
-])
+@pytest.mark.parametrize(
+    "viewer, expected",
+    [
+        (REGIONAL, EVERYTHING),
+        (ADMIN, EVERYTHING),
+        # BR4.2: the same site/own test for every entry, "unknown" ones included.
+        (RM, {"rm_site1", "unknown_site1", "rm_login"}),
+        (
+            {
+                "user_id": "user_rm_buckhead",
+                "persona": "RESTAURANT_MANAGER",
+                "site_ids": ["site_002"],
+                "region_id": None,
+            },
+            {"regional_site2", "unknown_site2"},
+        ),
+        ({"user_id": "nobody", "persona": "RESTAURANT_MANAGER", "site_ids": None, "region_id": None}, set()),
+    ],
+)
 def test_visibility_follows_token_scope(audit_path, viewer, expected):
     ids = _seed_visibility_entries()
     result = audit.page(viewer)
@@ -556,8 +655,12 @@ def test_viewer_without_a_user_id_is_refused(audit_path):
 
 def test_paging_by_before_newest_first(audit_path):
     for i in range(130):  # every third entry is another site's, invisible to the RM
-        audit.append(_entry(site_id="site_002" if i % 3 == 2 else "site_001",
-                            user_id="user_regional_atl" if i % 3 == 2 else "user_rm_midtown"))
+        audit.append(
+            _entry(
+                site_id="site_002" if i % 3 == 2 else "site_001",
+                user_id="user_regional_atl" if i % 3 == 2 else "user_rm_midtown",
+            )
+        )
     first = audit.page(REGIONAL)
     assert (first["limit"], first["total"], len(first["entries"])) == (50, 130, 50)
     assert first["entries"][0]["entry_id"] == "000000000130"
@@ -614,13 +717,16 @@ def test_failed_append_fails_closed_with_one_error_line(audit_path, monkeypatch,
         mp.setattr(audit, "_write_all", broken_write)
         with pytest.raises(audit.AuditUnavailable):
             audit.append(_entry(kind="employee", record_id="emp_9"))
-    for call in (lambda: audit.append(_entry()), lambda: audit.append_batch([_entry()]),
-                 lambda: audit.page(REGIONAL)):  # stays unavailable even though writes work again
+    for call in (
+        lambda: audit.append(_entry()),
+        lambda: audit.append_batch([_entry()]),
+        lambda: audit.page(REGIONAL),
+    ):  # stays unavailable even though writes work again
         with pytest.raises(audit.AuditUnavailable):
             call()
     assert _error_lines(capsys.readouterr().err) == [
-        "[mock-hsm] ERROR audit: append failed (No space left on device) for add employee/emp_9; "
-        "trail unavailable"]
+        "[mock-hsm] ERROR audit: append failed (No space left on device) for add employee/emp_9; trail unavailable"
+    ]
     assert audit_path.stat().st_size == size
 
     audit.configure()  # operator restart
@@ -637,7 +743,8 @@ def test_failed_batch_append_logs_its_first_entry(audit_path, monkeypatch, capsy
         audit.append_batch([_entry(action="bulk_row", file_row=1, record_id="r1"), _entry(file_row=2)])
     assert _error_lines(capsys.readouterr().err) == [
         "[mock-hsm] ERROR audit: batch append failed (disk full) for 2 entries, first bulk_row employee/r1; "
-        "trail unavailable"]
+        "trail unavailable"
+    ]
     assert audit_path.read_bytes() == b""  # the partial line was truncated back
 
 
@@ -661,7 +768,8 @@ def test_failed_rollback_names_the_offset(audit_path, monkeypatch, capsys):
     assert _error_lines(capsys.readouterr().err) == [
         "[mock-hsm] ERROR audit: append failed (disk full) for add employee/emp_2; trail unavailable; "
         f"rollback failed (read-only file system): remove every byte from offset {offset} onward in "
-        f"{audit_path} before restarting"]
+        f"{audit_path} before restarting"
+    ]
     assert audit_path.stat().st_size > offset  # the half line is still there
 
     audit.configure()  # the leftover is an unterminated line, so startup drops it as torn
@@ -693,14 +801,16 @@ def test_startup_line_counts(audit_path, capsys):
 
     audit.configure(clock=clock)
     info = [line for line in capsys.readouterr().err.splitlines() if " INFO " in line]
-    assert info == ["[mock-hsm] INFO audit: loaded 2 entries, torn line dropped, purged 0, "
-                    "high-water mark 000000000003"]
+    assert info == [
+        "[mock-hsm] INFO audit: loaded 2 entries, torn line dropped, purged 0, high-water mark 000000000003"
+    ]
 
 
 # ------------------------------------------------------------------- perf
 # NFR3.5-NFR3.8 on the machine running the suite. Each failure reports the
 # measured value next to its target; the measured values are also printed
 # (visible with `pytest -s`).
+
 
 def _write_large_trail(path, count, now, expired=1_000):
     """Write ``count`` entries directly in the new layout: ``expired`` of them
@@ -712,13 +822,25 @@ def _write_large_trail(path, count, now, expired=1_000):
     users = ["user_rm_midtown", "user_regional_atl", "user_rm_buckhead"]
 
     def entry(i):
-        return json.dumps({
-            "entry_id": f"{i:012d}", "timestamp": old_ts if i <= expired else new_ts,
-            "user_id": users[i % 3], "persona": "RESTAURANT_MANAGER", "session_id": None,
-            "source": "dashboard", "action": "update", "outcome": "allowed", "kind": "on_hand",
-            "record_id": f"rm_{i % 12}", "site_id": f"site_00{i % 3 + 1}",
-            "changes": {"before": {"qty": i - 1}, "after": {"qty": i}}, "reason": None, "file_row": None,
-        }, separators=(",", ":")).encode()
+        return json.dumps(
+            {
+                "entry_id": f"{i:012d}",
+                "timestamp": old_ts if i <= expired else new_ts,
+                "user_id": users[i % 3],
+                "persona": "RESTAURANT_MANAGER",
+                "session_id": None,
+                "source": "dashboard",
+                "action": "update",
+                "outcome": "allowed",
+                "kind": "on_hand",
+                "record_id": f"rm_{i % 12}",
+                "site_id": f"site_00{i % 3 + 1}",
+                "changes": {"before": {"qty": i - 1}, "after": {"qty": i}},
+                "reason": None,
+                "file_row": None,
+            },
+            separators=(",", ":"),
+        ).encode()
 
     lines, i = [], 1
     while i <= count:
@@ -748,8 +870,10 @@ def test_perf_append_p95_under_50ms(audit_path):
 
 @pytest.mark.perf
 def test_perf_batch_of_500_under_2s(audit_path):
-    rows = [_entry(action="bulk_row", file_row=i, record_id=f"rm_{i}", changes={"record": {"qty": i, "uom": "lb"}})
-            for i in range(1, 501)]
+    rows = [
+        _entry(action="bulk_row", file_row=i, record_id=f"rm_{i}", changes={"record": {"qty": i, "uom": "lb"}})
+        for i in range(1, 501)
+    ]
     start = time.perf_counter()
     ids = audit.append_batch(rows)
     elapsed = time.perf_counter() - start
@@ -778,6 +902,5 @@ def test_perf_startup_and_page_at_100k_entries(audit_path):
             elapsed = time.perf_counter() - start
             _report(f"page {page_no} for {viewer['persona']}", elapsed, 1.0)
             assert len(result["entries"]) == 50
-            assert elapsed <= 1.0, (f"page {page_no} for {viewer['persona']} took {elapsed:.3f} s; "
-                                    f"target 1 s (NFR3.7)")
+            assert elapsed <= 1.0, f"page {page_no} for {viewer['persona']} took {elapsed:.3f} s; target 1 s (NFR3.7)"
             before = result["next_before"]

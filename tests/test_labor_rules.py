@@ -2,6 +2,7 @@
 Unit tests for the mock Labor Rules Engine (mock_hsm/server.py's
 /labor/rules/validate handler), called directly -- no HTTP server needed.
 """
+
 import sys
 from pathlib import Path
 
@@ -37,24 +38,26 @@ def test_overnight_shifts_count_toward_weekly_overtime():
 
 
 def test_same_day_shifts_capped_by_daily_total():
-    assert _rules_hit(_shift("2026-10-01", "00:00", "09:00"),
-                      _shift("2026-10-01", "10:00", "19:00")) == ["max_daily_hours"]
+    assert _rules_hit(_shift("2026-10-01", "00:00", "09:00"), _shift("2026-10-01", "10:00", "19:00")) == [
+        "max_daily_hours"
+    ]
 
 
 def test_short_split_shift_is_allowed():
-    assert _rules_hit(_shift("2026-10-01", "11:00", "14:00"),
-                      _shift("2026-10-01", "17:00", "21:00")) == []
+    assert _rules_hit(_shift("2026-10-01", "11:00", "14:00"), _shift("2026-10-01", "17:00", "21:00")) == []
 
 
 def test_overlapping_shifts_flagged():
-    assert _rules_hit(_shift("2026-10-01", "09:00", "13:00"),
-                      _shift("2026-10-01", "12:00", "15:00")) == ["overlapping_shifts"]
+    assert _rules_hit(_shift("2026-10-01", "09:00", "13:00"), _shift("2026-10-01", "12:00", "15:00")) == [
+        "overlapping_shifts"
+    ]
 
 
 def test_overnight_shift_rest_measured_from_real_end():
     # Ends 06:00 on the 2nd; next starts 10:00 on the 2nd -> 4h rest.
-    assert _rules_hit(_shift("2026-10-01", "22:00", "06:00"),
-                      _shift("2026-10-02", "10:00", "16:00")) == ["min_rest_between_shifts"]
+    assert _rules_hit(_shift("2026-10-01", "22:00", "06:00"), _shift("2026-10-02", "10:00", "16:00")) == [
+        "min_rest_between_shifts"
+    ]
 
 
 def test_consecutive_days():
@@ -62,15 +65,18 @@ def test_consecutive_days():
     assert _rules_hit(*week) == ["max_consecutive_days"]
 
 
-@pytest.mark.parametrize("shifts", [
-    [_shift("2026-10-01", "9am", "17:00")],
-    # UTC offsets would let a 12h clock-time shift validate as 8h absolute.
-    [_shift("2026-10-01", "08:00+00:00", "20:00+04:00")],
-    [_shift("2026-10-01", "09:00:00", "17:00")],
-    [5],
-    [None],
-    None,
-])
+@pytest.mark.parametrize(
+    "shifts",
+    [
+        [_shift("2026-10-01", "9am", "17:00")],
+        # UTC offsets would let a 12h clock-time shift validate as 8h absolute.
+        [_shift("2026-10-01", "08:00+00:00", "20:00+04:00")],
+        [_shift("2026-10-01", "09:00:00", "17:00")],
+        [5],
+        [None],
+        None,
+    ],
+)
 def test_malformed_input_rejected(shifts):
     with pytest.raises(ApiError) as exc:
         labor_rules_validate({}, None, {}, {"jurisdiction": "GA", "shifts": shifts})
