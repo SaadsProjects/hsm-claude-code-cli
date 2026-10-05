@@ -43,7 +43,7 @@ ruff format --check .                    # formatting, checked in CI
 coverage run -m pytest tests/ -q && coverage combine -q && coverage report   # coverage (.coveragerc; subprocesses measured)
 python3 mcp_server/hsm_tools.py          # run the MCP server standalone over stdio
 mcp dev mcp_server/hsm_tools.py          # MCP Inspector (needs the mcp[cli] extra)
-streamlit run dashboard/app.py           # dashboard with login and data writes (needs the mock backend and the secret exported, see below)
+streamlit run dashboard/app.py           # dashboard with login and data writes; runs its own backend in-process (needs the secret exported, see below)
 ```
 
 **Signing secret.** Tokens are signed with `HSM_SIGNING_SECRET` (at least 32
@@ -148,7 +148,14 @@ re-add them afterwards.
 
 The Streamlit dashboard (`dashboard/app.py`, loaders in `dashboard/data.py`)
 goes through `HsmClient` like the MCP tools and reuses the `agents/`
-calculation functions. Its Overview, Labor and Inventory tabs are read-only;
+calculation functions. It runs its own mock backend inside its process
+(`mock_hsm/embedded.py`): `embedded.start()` runs at the top of every render
+and hosts `mock_hsm.server.Handler` on `127.0.0.1` on a free port, one per
+process, and `session.client_for` takes its address from `embedded.current()`.
+The dashboard never reads `HSM_BASE_URL`, which is for the MCP server and the
+hooks, and it doesn't need `python3 -m mock_hsm.server`. If the start fails
+(no secret, an unusable audit trail, a bind error), the page shows only "The
+demo backend didn't start…" and the cause goes to the `mock_hsm.embedded` log. Its Overview, Labor and Inventory tabs are read-only;
 their only POST is the side-effect-free `/labor/rules/validate`. Published
 schedules and POs are read through the GET routes
 `/labor/sites/{site_id}/schedules` and `/inventory/purchase-orders`, which the
@@ -164,7 +171,10 @@ publishes a schedule or submits a PO, and a test enforces that.
 
 Every data write, and every publish or PO attempt, is appended to an audit
 trail (`mock_hsm/audit.py`, file from `HSM_AUDIT_PATH`, default
-`mock_hsm/audit/audit.jsonl`, gitignored). If the trail is unavailable, the
+`mock_hsm/audit/audit.jsonl`, gitignored; the dashboard's embedded backend
+defaults instead to `<system temp>/hsm-demo-<uid>/audit.jsonl` in a directory
+it creates with mode 0700 and refuses to start if that directory is a symlink,
+someone else's, or open to group or other). If the trail is unavailable, the
 publish and PO routes return 503 "audit unavailable", which reaches the MCP
 tools as an error. Tests point the trail at a temp file through `tests/conftest.py`.
 

@@ -1,8 +1,12 @@
 """
 Streamlit dashboard over the HSM labor and inventory services.
 
-    python3 -m mock_hsm.server &          # or point HSM_BASE_URL at another backend
     streamlit run dashboard/app.py --server.address 127.0.0.1
+
+The dashboard runs its own mock backend on 127.0.0.1 inside this process
+(mock_hsm/embedded.py), started at the top of every render; no separate
+backend is needed and HSM_BASE_URL is not read. If that start fails, the page
+shows only a short "didn't start" message and the cause goes to the log.
 
 The user logs in as a persona (a backend session); the tabs appear only while
 logged in. Every read and write goes through HsmClient with a token minted for
@@ -24,9 +28,10 @@ import altair as alt
 import pandas as pd
 import streamlit as st
 
-from agents.hsm_client import HSM_BASE_URL, HsmApiError
+from agents.hsm_client import HsmApiError
 from dashboard import actions, audit_tab, data, manage_tab, session
 from dashboard.safe_text import escape_md
+from mock_hsm import embedded
 
 # Persona list for the picker. Token minting is already tied to the mock's
 # user table (mock_hsm.auth), so reading it here adds no new coupling; no
@@ -34,6 +39,8 @@ from dashboard.safe_text import escape_md
 from mock_hsm.db import USERS
 
 CACHE_TTL_SECONDS = 60
+# Screen 4: fixed text only; the cause is in the log (mock_hsm.embedded logs it).
+BACKEND_FAILED = "The demo backend didn't start. Reload the page or try again later."
 
 # Categorical slots in fixed order, plus the reserved "critical" status color.
 SERIES = ["#2a78d6", "#eb6834", "#1baf7a", "#eda100"]
@@ -444,9 +451,13 @@ def _guarded_tab(draw, *args):
 
 
 # --------------------------------------------------------------------- main
-def main():
+def _page_header():
     st.set_page_config(page_title="HSM Dashboard", layout="wide")
     st.title("HSM labor & inventory")
+
+
+def main():
+    _page_header()
 
     problem = actions.check_session()  # every run while logged in; may log out (WF2)
     login = session.login()
@@ -480,7 +491,8 @@ def main():
         if st.button("Refresh data"):
             # The shared cache and this session's Manage data reads (Q3: B).
             actions.then_rerun(actions.clear_cached_reads)
-        st.caption(f"Backend: {HSM_BASE_URL} · cached {CACHE_TTL_SECONDS}s")
+        backend = embedded.current()  # read at render time: a replaced backend has a new port
+        st.caption(f"Backend: {backend.address if backend else 'not running'} · cached {CACHE_TTL_SECONDS}s")
 
     with st.spinner("Loading…"):
         bundle = load_site_bundle(user_id, site_id, 0 if week == "This week" else 7)
@@ -501,14 +513,21 @@ def main():
 
 
 def run():
+    # The backend start is the first step of every render, before any screen
+    # reads data (BR5.4); module state makes every rerun after the first a
+    # liveness check. A failure shows only Screen 4.
+    if embedded.start().status != "running":
+        _page_header()
+        st.markdown(BACKEND_FAILED)
+        return
     try:
         main()
+    except embedded.BackendNotRunning:
+        st.markdown(BACKEND_FAILED)  # lost between the start and a read; the next rerun replaces it
     except HsmApiError as e:
         st.warning(f"HSM API refused the request ({e.status}): {e.message}")
     except urllib.error.URLError as e:
-        st.error(
-            f"Can't reach the HSM backend at {HSM_BASE_URL} ({e.reason}). Start it with `python3 -m mock_hsm.server &`."
-        )
+        st.error(f"Can't reach the demo backend ({escape_md(str(e.reason))}). Reload the page or try again later.")
 
 
 run()

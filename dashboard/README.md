@@ -10,19 +10,29 @@ trail. The dashboard never publishes schedules or submits purchase orders.
 ```bash
 pip install --require-hashes -r requirements-dev.txt   # includes streamlit 1.64
 scripts/dev-secret.sh                                 # once: HSM_SIGNING_SECRET into .env.local
-python3 -m mock_hsm.server &                          # mock backend on 127.0.0.1:8770
 export HSM_SIGNING_SECRET="$(sed -n 's/^HSM_SIGNING_SECRET=//p' .env.local)"
 streamlit run dashboard/app.py --server.address 127.0.0.1
 ```
 
 Tokens are signed with `HSM_SIGNING_SECRET`, and there is no default. The
-backend reads it from `.env.local` (written by `scripts/dev-secret.sh`) when it
-isn't exported. The dashboard mints its tokens in its own process and doesn't
-read `.env.local` yet, so export the same value in the dashboard's shell, as
-above. Without it, logging in fails with an error naming `HSM_SIGNING_SECRET`.
+dashboard mints its tokens in its own process and doesn't read `.env.local`
+(written by `scripts/dev-secret.sh`) yet, so export the value in the
+dashboard's shell, as above.
 
-Every read and write goes through `HsmClient`. Set `HSM_BASE_URL` to point it
-at another backend.
+No separate backend is needed. The dashboard starts the mock backend inside
+its own process (`mock_hsm/embedded.py`) at the top of every render: one per
+process, bound to `127.0.0.1` on a free port. Every read and write goes through
+`HsmClient`, addressed by `session.client_for` to that backend; `HSM_BASE_URL`
+is not read (it is for the MCP server and the hooks, which use
+`python3 -m mock_hsm.server`). The sidebar caption shows the backend's address.
+The audit trail goes to `HSM_AUDIT_PATH` when it is set, otherwise to
+`<system temp>/hsm-demo-<uid>/audit.jsonl`, in a directory the dashboard
+creates with mode 0700.
+
+If the backend can't start (for example `HSM_SIGNING_SECRET` is missing or
+too short, or the audit trail is unusable), the page shows only "The demo
+backend didn't start. Reload the page or try again later." The cause is
+logged as a warning by the `mock_hsm.embedded` logger.
 
 ### Reach
 

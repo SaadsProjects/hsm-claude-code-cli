@@ -51,8 +51,9 @@ that's what exposes the HSM tools.
 ### Dashboard
 
 ```bash
-# with the mock backend running (or HSM_BASE_URL pointing elsewhere); the
-# dashboard doesn't read .env.local itself yet, so export the secret first
+# the dashboard runs its own mock backend in-process (no separate backend or
+# HSM_BASE_URL needed); it doesn't read .env.local itself yet, so export the
+# secret first
 export HSM_SIGNING_SECRET="$(sed -n 's/^HSM_SIGNING_SECRET=//p' .env.local)"
 streamlit run dashboard/app.py
 ```
@@ -306,7 +307,8 @@ Everything in this project was built and verified in this environment:
 
 ```
 mock_hsm/                       mock HSM REST backend (audit.py: append-only audit trail;
-                                writes.py: dashboard data writes and sessions)
+                                writes.py: dashboard data writes and sessions;
+                                embedded.py: the backend the dashboard runs in its own process)
 agents/hsm_client.py            REST client used by the MCP tools
 agents/labor_scheduling_agent.py   pure demand-calculation function only
 agents/inventory_agent.py          pure anomaly/reorder-calculation functions only
