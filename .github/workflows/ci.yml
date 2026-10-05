@@ -166,6 +166,14 @@ jobs:
           python-version: ${{ matrix.python }}
           cache: pip
           cache-dependency-path: requirements-dev.txt
+      # CI holds no signing secret: tests/conftest.py generates a fresh one per
+      # run. Fail if one ever reaches this job's environment.
+      - name: No signing secret in the job environment
+        run: |
+          if [ -n "${HSM_SIGNING_SECRET:-}" ]; then
+            echo "::error::HSM_SIGNING_SECRET is set in the tests job; CI must not hold a signing secret (tests generate their own)."
+            exit 1
+          fi
       - run: pip install --require-hashes -r requirements-dev.txt
       # Plain `pytest tests/`, never an unrelated -m: any -m turns off the
       # default perf skip (tests/conftest.py). A failing test is retried once.

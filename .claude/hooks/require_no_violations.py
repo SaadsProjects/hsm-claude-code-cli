@@ -52,12 +52,20 @@ def deny(reason: str):
 
 def main():
     from agents.hsm_client import HsmClient
-    from mock_hsm.auth import mint_token
+    from mock_hsm.auth import SecretMissingError, load_local_secret, mint_token, require_secret
 
     payload = json.load(sys.stdin)
     if payload.get("tool_name") != "mcp__hsm__publish_schedule":
         print(json.dumps({}))  # not our tool -- fall through
         return
+
+    # No usable signing secret means no way to re-validate: deny explicitly,
+    # naming the variable, before any validation is attempted.
+    load_local_secret()
+    try:
+        require_secret()
+    except SecretMissingError as e:
+        deny(f"cannot re-validate this schedule: {e}")
 
     tool_input = payload.get("tool_input", {})
     shifts = tool_input.get("shifts", [])
@@ -84,5 +92,5 @@ if __name__ == "__main__":
     # deny() exits via SystemExit, which this deliberately doesn't catch.
     try:
         main()
-    except Exception as e:  # noqa: BLE001
+    except Exception as e:  # noqa: BLE001 -- a crashed hook fails open, so every failure becomes an explicit deny
         deny(f"could not re-validate schedule against the Labor Rules Engine: {type(e).__name__}: {e}")

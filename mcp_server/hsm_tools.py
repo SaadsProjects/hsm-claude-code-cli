@@ -27,7 +27,7 @@ from agents.hsm_client import HsmClient
 from agents.inventory_agent import compute_reorder_needs as _compute_reorder_needs
 from agents.inventory_agent import compute_usage_anomalies as _compute_usage_anomalies
 from agents.labor_scheduling_agent import compute_demand
-from mock_hsm.auth import mint_token
+from mock_hsm.auth import load_local_secret, mint_token
 
 mcp = FastMCP(
     "hsm",
@@ -164,5 +164,13 @@ def submit_purchase_order(
     return _client().submit_purchase_order(vendor_id, line_items, site_id=site_id, region_id=region_id)
 
 
-if __name__ == "__main__":
+def main():
+    # Claude Code starts this server from .mcp.json, which never holds the
+    # signing secret: take it from the shell, or else from .env.local. Without
+    # one, every tool call returns an error naming HSM_SIGNING_SECRET.
+    load_local_secret()
     mcp.run(transport="stdio")
+
+
+if __name__ == "__main__":
+    main()

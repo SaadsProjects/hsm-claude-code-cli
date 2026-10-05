@@ -1,5 +1,11 @@
 """
-Shared test configuration: keep every test's audit trail in a temporary file.
+Shared test configuration: a throwaway signing secret per run, and every
+test's audit trail in a temporary file.
+
+There is no default signing secret anywhere (mock_hsm/auth.py), so this
+module generates one per run and puts it in the environment at import time,
+before any mock_hsm import, server or subprocess; subprocess tests inherit
+it. It always overwrites, so a developer's own shell secret is never used.
 
 The mock backend audits gated writes into the file named by HSM_AUDIT_PATH
 (mock_hsm/audit.py). Without this, any test that publishes a schedule or
@@ -7,14 +13,24 @@ submits a PO -- directly or through an in-process HTTP server -- would write
 to the real default file, mock_hsm/audit/audit.jsonl.
 """
 
+import os
+import secrets
 import sys
 from pathlib import Path
 
 import pytest
 
+
+def new_test_secret():
+    """A fresh 43-character URL-safe value: 32 random bytes, comfortably over the 32-byte minimum."""
+    return secrets.token_urlsafe(32)
+
+
+os.environ["HSM_SIGNING_SECRET"] = new_test_secret()
+
 sys.path.insert(0, str(Path(__file__).resolve().parent.parent))
 
-from mock_hsm import audit, writes
+from mock_hsm import audit, writes  # noqa: E402 -- the secret must be in the environment before mock_hsm loads
 
 
 def pytest_configure(config):
