@@ -13,6 +13,12 @@ coverage.json
 junit.xml
 audit.json
 bandit.json
+# Secrets: the local signing secret (scripts/dev-secret.sh) and Streamlit
+# secrets. Kept explicit here, outside the AI-DLC-managed block below.
+.env
+.env.local
+.env.*
+.streamlit/secrets.toml
 
 # BEGIN AI-DLC:gitignore
 # Logs

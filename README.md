@@ -16,7 +16,10 @@ See `CLAUDE_CODE_CLI_PLAN.md` for the full design writeup and rationale.
 python3 -m venv .venv && source .venv/bin/activate
 pip install --require-hashes -r requirements-dev.txt   # dev/test lock; requirements.txt is the hosted-app runtime lock
 
-# Terminal 1 -- start the mock HSM backend
+# Once per clone -- create the local token-signing secret (.env.local, git-ignored)
+scripts/dev-secret.sh
+
+# Terminal 1 -- start the mock HSM backend (refuses to start without the secret)
 bash scripts/start_mock_server.sh
 
 # Terminal 2 -- pick a persona, then start Claude Code in this directory
@@ -32,6 +35,15 @@ export HSM_ACTIVE_USER=user_regional_atl
 claude -p "/review-inventory" --output-format json
 ```
 
+Tokens are signed with `HSM_SIGNING_SECRET`, which has no default anywhere.
+`scripts/dev-secret.sh` writes a fresh one (at least 32 bytes) to `.env.local`
+with mode 600, and refuses to replace an existing one unless you pass
+`--force`. The backend, the start script, the publish hook and the MCP server
+read `.env.local` when the variable isn't exported, so the `claude` shell gets
+the same value without any extra step; an exported value always wins. Without
+a secret, the backend won't start, the publish hook denies and every HSM tool
+returns an error naming `HSM_SIGNING_SECRET`.
+
 The first time you start `claude` in this directory it will ask to
 approve the project's `.mcp.json` server (`hsm`) — approve it, since
 that's what exposes the HSM tools.
@@ -39,7 +51,9 @@ that's what exposes the HSM tools.
 ### Dashboard
 
 ```bash
-# with the mock backend running (or HSM_BASE_URL pointing elsewhere)
+# with the mock backend running (or HSM_BASE_URL pointing elsewhere); the
+# dashboard doesn't read .env.local itself yet, so export the secret first
+export HSM_SIGNING_SECRET="$(sed -n 's/^HSM_SIGNING_SECRET=//p' .env.local)"
 streamlit run dashboard/app.py
 ```
 
@@ -150,7 +164,8 @@ audit trail is durable.
   Manager's persona value and scope, so the gated publish and PO routes
   treat it the same way. The audit trail tells it apart by its user id.
 - **Sessions:** `POST /sessions` starts a login session for the token's
-  persona. There is no password. Every write carries the `session_id` and a
+  persona. The bearer token, signed with `HSM_SIGNING_SECRET`, is the only
+  credential. Every write carries the `session_id` and a
   `request_id` in its JSON body. A session ends on
   `POST /sessions/{id}/logout`, or after 15 minutes without a data write.
   Reads and status checks (`GET /sessions/{id}`) never refresh it. A session

@@ -9,9 +9,17 @@ trail. The dashboard never publishes schedules or submits purchase orders.
 
 ```bash
 pip install --require-hashes -r requirements-dev.txt   # includes streamlit 1.64
+scripts/dev-secret.sh                                 # once: HSM_SIGNING_SECRET into .env.local
 python3 -m mock_hsm.server &                          # mock backend on 127.0.0.1:8770
+export HSM_SIGNING_SECRET="$(sed -n 's/^HSM_SIGNING_SECRET=//p' .env.local)"
 streamlit run dashboard/app.py --server.address 127.0.0.1
 ```
+
+Tokens are signed with `HSM_SIGNING_SECRET`, and there is no default. The
+backend reads it from `.env.local` (written by `scripts/dev-secret.sh`) when it
+isn't exported. The dashboard mints its tokens in its own process and doesn't
+read `.env.local` yet, so export the same value in the dashboard's shell, as
+above. Without it, logging in fails with an error naming `HSM_SIGNING_SECRET`.
 
 Every read and write goes through `HsmClient`. Set `HSM_BASE_URL` to point it
 at another backend.
@@ -20,8 +28,8 @@ at another backend.
 
 `.streamlit/config.toml` makes the dashboard listen on this machine only
 (`server.address = "127.0.0.1"`). It also makes Streamlit refuse uploads over
-2 MB (`server.maxUploadSize = 2`). There is no password: anyone who can open the
-page can log in as any persona. To open the dashboard to your network on
+2 MB (`server.maxUploadSize = 2`). The persona picker is not a sign-in: anyone who
+can open the page can log in as any persona. To open the dashboard to your network on
 purpose, start it with `--server.address 0.0.0.0`, and only on a network you
 trust.
 

@@ -22,6 +22,7 @@ what they return under db._lock (ReadGuard) and add record metadata when
 asked with ``?with=meta``.
 """
 
+import argparse
 import copy
 import json
 import re
@@ -32,7 +33,15 @@ from itertools import pairwise
 from urllib.parse import parse_qs, urlparse
 
 from mock_hsm import audit, db, writes
-from mock_hsm.auth import TokenError, region_allowed, site_allowed, verify_token
+from mock_hsm.auth import (
+    SecretMissingError,
+    TokenError,
+    load_local_secret,
+    region_allowed,
+    require_secret,
+    site_allowed,
+    verify_token,
+)
 
 
 class ApiError(Exception):
@@ -718,6 +727,8 @@ class Handler(BaseHTTPRequestHandler):
                 claims = verify_token(auth_header[len("Bearer ") :])
             except TokenError as e:
                 return self._send(401, {"error": f"invalid token: {e}"})
+            except SecretMissingError as e:
+                return self._secret_unavailable(method, parsed.path, e)
 
         for m, regex, handler in ROUTES:
             if m != method:
@@ -728,10 +739,20 @@ class Handler(BaseHTTPRequestHandler):
                     status, payload = handler(match.groupdict(), claims, qs, body)
                 except ApiError as e:
                     return self._send(e.status, {"error": e.message})
+                except SecretMissingError as e:
+                    return self._secret_unavailable(method, parsed.path, e)
                 except Exception as e:  # noqa: BLE001 -- any handler bug becomes a 500, not a dropped connection
                     return self._send(500, {"error": str(e)})
                 return self._send(status, payload)
         self._send(404, {"error": f"no route for {method} {parsed.path}"})
+
+    def _secret_unavailable(self, method, path, error):
+        """The backend lost its signing secret mid-run: 503 naming the variable,
+        not a 500, and keep serving. The warning carries the path without the
+        query string, and neither it nor the body ever holds the value (the
+        message is fixed text from mock_hsm.auth)."""
+        print(f"[mock-hsm] WARNING {method} {path}: 503, signing secret unavailable ({error.reason})", file=sys.stderr)
+        return self._send(503, {"error": str(error)})
 
     def _send(self, status, payload):
         body = json.dumps(payload).encode()
@@ -761,9 +782,25 @@ def run(host="127.0.0.1", port=8770):
     # of an audit append or page call (mock_hsm/audit.py).
     audit.configure()
     server = ThreadingHTTPServer((host, port), Handler)
-    print(f"[mock-hsm] listening on http://{host}:{port}")
+    print(f"[mock-hsm] listening on http://{host}:{port}", flush=True)
     server.serve_forever()
 
 
+def main(argv=None):
+    """Separate-process start: fail closed before binding when there is no
+    usable signing secret (taken from .env.local if the variable is unset)."""
+    parser = argparse.ArgumentParser(prog="python3 -m mock_hsm.server", description="Run the mock HSM backend.")
+    parser.add_argument("--port", type=int, default=8770, help="port to listen on (default 8770)")
+    args = parser.parse_args(argv)
+    load_local_secret()
+    try:
+        require_secret()
+    except SecretMissingError as e:
+        print(f"[mock-hsm] refusing to start: {e}", file=sys.stderr)
+        return 1
+    run(port=args.port)
+    return 0
+
+
 if __name__ == "__main__":
-    run()
+    sys.exit(main())

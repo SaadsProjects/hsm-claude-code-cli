@@ -32,7 +32,8 @@ hooks — rather than a bespoke orchestration script. See
 
 ```bash
 pip install --require-hashes -r requirements-dev.txt   # Python 3.10+; dev/test lock (requirements.txt is the hosted-app runtime lock)
-python3 -m mock_hsm.server &             # mock backend on 127.0.0.1:8770 (or scripts/start_mock_server.sh)
+scripts/dev-secret.sh                    # once per clone: writes HSM_SIGNING_SECRET to .env.local (git-ignored, mode 600)
+python3 -m mock_hsm.server &             # mock backend on 127.0.0.1:8770 (or scripts/start_mock_server.sh [--port N])
 python3 -m pytest tests/ -q              # all tests; they start their own mock servers (:8772, :8773, one ephemeral)
 python3 -m pytest tests/ -q -m perf      # the timing tests, which are skipped by default
 python3 -m pytest tests/ -q -m browser   # Playwright tests, skipped by default (need Chromium)
@@ -42,8 +43,20 @@ ruff format --check .                    # formatting, checked in CI
 coverage run -m pytest tests/ -q && coverage combine -q && coverage report   # coverage (.coveragerc; subprocesses measured)
 python3 mcp_server/hsm_tools.py          # run the MCP server standalone over stdio
 mcp dev mcp_server/hsm_tools.py          # MCP Inspector (needs the mcp[cli] extra)
-streamlit run dashboard/app.py           # dashboard with login and data writes (needs the mock backend running)
+streamlit run dashboard/app.py           # dashboard with login and data writes (needs the mock backend and the secret exported, see below)
 ```
+
+**Signing secret.** Tokens are signed with `HSM_SIGNING_SECRET` (at least 32
+bytes). There is no default anywhere: without it the backend and the start
+script refuse to start, the publish hook denies, MCP tools return an error
+naming the variable, and a running backend answers 503. Run
+`scripts/dev-secret.sh` once to write it to `.env.local` (`--force` replaces
+it). The backend, the start script, the publish hook and the MCP server read
+`.env.local` themselves when the variable isn't exported, so the `claude`
+shell needs nothing extra; an exported value always wins. The local dashboard
+doesn't read the file yet, so export it in that shell first:
+`export HSM_SIGNING_SECRET="$(sed -n 's/^HSM_SIGNING_SECRET=//p' .env.local)"`.
+Tests generate their own secret per run (`tests/conftest.py`); CI holds none.
 
 Test layout:
 - `test_labor_rules.py` and `test_calculations.py` call the validator handler
@@ -65,7 +78,8 @@ is missing or lint is dirty; use Edit/Write for such file edits.
 
 ## Running the workflows
 
-The mock backend must be running, and `HSM_ACTIVE_USER` must be exported
+The mock backend must be running, `.env.local` must hold the signing secret
+(`scripts/dev-secret.sh`, see Commands), and `HSM_ACTIVE_USER` must be exported
 **before** starting `claude` — the MCP server reads it to mint a scoped
 token per call:
 
