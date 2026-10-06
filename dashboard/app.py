@@ -3,13 +3,18 @@ Streamlit dashboard over the HSM labor and inventory services.
 
     streamlit run dashboard/app.py --server.address 127.0.0.1
 
-The dashboard runs its own mock backend on 127.0.0.1 inside this process
-(mock_hsm/embedded.py), started at the top of every render; no separate
-backend is needed and HSM_BASE_URL is not read. If that start fails, the page
-shows only a short "didn't start" message and the cause goes to the log.
+Every render starts with the sign-in gate (dashboard/auth_gate.py): only a
+Google account with a verified email on the HSM_ALLOWED_EMAILS allowlist gets
+past it, and nothing below renders, nor does the backend start, until then.
 
-The user logs in as a persona (a backend session); the tabs appear only while
-logged in. Every read and write goes through HsmClient with a token minted for
+The dashboard runs its own mock backend on 127.0.0.1 inside this process
+(mock_hsm/embedded.py), started after the gate allows; no separate backend is
+needed and HSM_BASE_URL is not read. If that start fails, the page shows only
+the Account section and a short "didn't start" message; the cause goes to the
+log.
+
+Inside the gate the user acts as a demo persona (a backend session); the tabs
+appear only while logged in. Every read and write goes through HsmClient with a token minted for
 the logged-in persona, so the backend's site/region scope and write rules
 decide what is visible and what is saved. Overview, Labor and Inventory are
 read-only; Manage data adds, edits, deletes and bulk-uploads reference data,
@@ -29,7 +34,7 @@ import pandas as pd
 import streamlit as st
 
 from agents.hsm_client import HsmApiError
-from dashboard import actions, audit_tab, data, manage_tab, session
+from dashboard import actions, audit_tab, auth_gate, data, manage_tab, session
 from dashboard.safe_text import escape_md
 from mock_hsm import embedded
 
@@ -400,7 +405,8 @@ def _session_panel(login):
     the login at once; a held write is dropped and the logged-out page says
     so (NFR2.4 as amended by NFR-design Q1: B)."""
     name = USERS.get(login["user_id"], {}).get("name", login["user_id"])
-    st.caption(f"Logged in as {escape_md(name)} ({escape_md(login['persona'])})")
+    # "Signed in" is the Google account; the persona is who it acts as.
+    st.caption(f"Acting as {escape_md(name)} ({escape_md(login['persona'])})")
     if st.button("Log out", key="session-logout"):
         actions.then_rerun(actions.log_out)
 
@@ -456,12 +462,13 @@ def _page_header():
     st.title("HSM labor & inventory")
 
 
-def main():
-    _page_header()
-
+def main(identity):
     problem = actions.check_session()  # every run while logged in; may log out (WF2)
     login = session.login()
     with st.sidebar:
+        auth_gate.render_account_section(identity)
+        st.divider()
+        st.subheader("Demo persona")
         if login is None:
             _login_panel()
         else:
@@ -513,15 +520,23 @@ def main():
 
 
 def run():
-    # The backend start is the first step of every render, before any screen
-    # reads data (BR5.4); module state makes every rerun after the first a
-    # liveness check. A failure shows only Screen 4.
+    # The page header runs first and once on every path, so every screen has
+    # one h1 (D1). Then the sign-in gate: nothing else renders, and the
+    # backend isn't started, unless it allows (C4 caller rule).
+    _page_header()
+    decision = auth_gate.gate()
+    if decision.outcome != auth_gate.ALLOW:
+        st.stop()
+    # The backend start comes before any screen reads data (BR5.4); module
+    # state makes every rerun after the first a liveness check. A failure
+    # shows only Screen 4.
     if embedded.start().status != "running":
-        _page_header()
+        with st.sidebar:
+            auth_gate.render_account_section(decision.identity)
         st.markdown(BACKEND_FAILED)
         return
     try:
-        main()
+        main(decision.identity)
     except embedded.BackendNotRunning:
         st.markdown(BACKEND_FAILED)  # lost between the start and a read; the next rerun replaces it
     except HsmApiError as e:

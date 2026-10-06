@@ -26,12 +26,13 @@ from urllib.parse import unquote
 
 import pytest
 import streamlit as st
-from streamlit.testing.v1 import AppTest
 
 sys.path.insert(0, str(Path(__file__).resolve().parent.parent))
 
+from gate_app import gate_app
+
 from agents.hsm_client import HsmApiError, HsmClient
-from dashboard import actions, data, kind_forms, manage_tab, session
+from dashboard import actions, data, kind_forms, manage_tab, markers, session
 from dashboard.safe_text import escape_md
 from mock_hsm import audit, writes
 from mock_hsm.auth import mint_token
@@ -106,9 +107,10 @@ def clock():
 
 
 @pytest.fixture
-def app(client_factory):
+def app(client_factory, monkeypatch):
+    # Through the sign-in gate as the shared fake allowed visitor (AC4.8.1).
     st.cache_data.clear()
-    at = AppTest.from_file(APP, default_timeout=30)
+    at = gate_app(APP, monkeypatch)
     at.run()
     return at
 
@@ -249,7 +251,7 @@ def test_hidden_shared_write_sent_through_the_client_is_refused_and_audited(clie
 def test_logged_out_view_shows_only_the_login(app):
     assert tab_labels(app) == []
     assert [i.value for i in app.info] == ["Log in to see the dashboard."]
-    assert button_keys(app) == {"session-login"}
+    assert button_keys(app) == {"session-login", markers.SIGN_OUT_BUTTON}
 
 
 @pytest.mark.parametrize("user_id", PERSONAS)
@@ -259,7 +261,7 @@ def test_login_and_logout_for_each_persona(app, user_id):
     login = app.session_state["login"]
     assert login["user_id"] == user_id
     name = USERS[user_id]["name"]
-    assert f"Logged in as {escape_md(name)} ({escape_md(login['persona'])})" in [c.value for c in app.sidebar.caption]
+    assert f"Acting as {escape_md(name)} ({escape_md(login['persona'])})" in [c.value for c in app.sidebar.caption]
     session_id = login["session_id"]
 
     click(app, "session-logout")
@@ -592,7 +594,7 @@ def test_one_logout_click_with_a_held_write_logs_out_and_says_it_was_dropped(app
     assert app.session_state["login"] is None
     assert app.session_state["pending_retry"] is None
     assert tab_labels(app) == []
-    assert button_keys(app) == {"session-login"}
+    assert button_keys(app) == {"session-login", markers.SIGN_OUT_BUTTON}
     assert [w.value for w in app.warning] == [escape_md(actions.LOGGED_OUT + actions.LOGOUT_WRITE_DROPPED)]
     assert session.client_for(REGIONAL).session_status(session_id)["active"] is False
 

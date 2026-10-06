@@ -43,7 +43,7 @@ ruff format --check .                    # formatting, checked in CI
 coverage run -m pytest tests/ -q && coverage combine -q && coverage report   # coverage (.coveragerc; subprocesses measured)
 python3 mcp_server/hsm_tools.py          # run the MCP server standalone over stdio
 mcp dev mcp_server/hsm_tools.py          # MCP Inspector (needs the mcp[cli] extra)
-streamlit run dashboard/app.py           # dashboard with login and data writes; runs its own backend in-process (needs the secret exported, see below)
+streamlit run dashboard/app.py           # dashboard behind a Google sign-in gate; runs its own backend in-process (needs .streamlit/secrets.toml, see below)
 ```
 
 **Signing secret.** Tokens are signed with `HSM_SIGNING_SECRET` (at least 32
@@ -53,10 +53,13 @@ naming the variable, and a running backend answers 503. Run
 `scripts/dev-secret.sh` once to write it to `.env.local` (`--force` replaces
 it). The backend, the start script, the publish hook and the MCP server read
 `.env.local` themselves when the variable isn't exported, so the `claude`
-shell needs nothing extra; an exported value always wins. The local dashboard
-doesn't read the file yet, so export it in that shell first:
-`export HSM_SIGNING_SECRET="$(sed -n 's/^HSM_SIGNING_SECRET=//p' .env.local)"`.
-Tests generate their own secret per run (`tests/conftest.py`); CI holds none.
+shell needs nothing extra; an exported value always wins. The dashboard reads
+it too (`dashboard/secrets_bridge.py`): an exported value, then
+`HSM_SIGNING_SECRET` in the Streamlit secrets (the hosted apps), then
+`.env.local`. The exception: a `HSM_SIGNING_SECRET` line in
+`.streamlit/secrets.toml` replaces an exported value, because Streamlit copies
+top-level secrets into the environment itself; the committed example leaves
+it unset. Tests generate their own secret per run (`tests/conftest.py`); CI holds none.
 
 Test layout:
 - `test_labor_rules.py` and `test_calculations.py` call the validator handler
@@ -146,6 +149,25 @@ MCP server), then restart Claude Code. `settings.json` holds AI-DLC's hook wirin
 --force` rewrites `settings.json`, so it would also drop the `ask` rules above;
 re-add them afterwards.
 
+Every dashboard rerun starts with a sign-in gate (`dashboard/auth_gate.py`):
+the page header, then the secrets bridge and the gate, and nothing else, not
+even the backend start, unless it allows. Only a Google account (Streamlit's
+`st.login`) whose `email_verified` is the boolean `True` and whose trimmed,
+lower-cased email exactly matches an entry of the `HSM_ALLOWED_EMAILS`
+allowlist gets in. The allowlist and the five `[auth]`/`[auth.google]` keys
+come from Streamlit secrets; `.streamlit/secrets.toml.example` lists them with
+placeholders (copy it to the git-ignored `.streamlit/secrets.toml`; with the
+placeholders the gate shows its sign-in screen). It fails closed: a missing or
+short signing secret, one equal to `auth.cookie_secret`, a missing sign-in key,
+a bad allowlist or any error in the gate shows "Sign-in isn't available right
+now." and never the persona picker. `decide` and `parse_allowlist` are pure;
+`current_identity`, `sign_in` and `sign_out` are the only code touching
+`st.user`/`st.login`/`st.logout`, and every dashboard `AppTest` is built with
+`tests/gate_app.py`, which replaces just that seam with a fake allowed
+identity. Screen markers (container and button keys) live in
+`dashboard/markers.py`. Inside the gate the persona login sits under "Demo
+persona", below the Account section with Sign out.
+
 The Streamlit dashboard (`dashboard/app.py`, loaders in `dashboard/data.py`)
 goes through `HsmClient` like the MCP tools and reuses the `agents/`
 calculation functions. It runs its own mock backend inside its process
@@ -154,8 +176,8 @@ and hosts `mock_hsm.server.Handler` on `127.0.0.1` on a free port, one per
 process, and `session.client_for` takes its address from `embedded.current()`.
 The dashboard never reads `HSM_BASE_URL`, which is for the MCP server and the
 hooks, and it doesn't need `python3 -m mock_hsm.server`. If the start fails
-(no secret, an unusable audit trail, a bind error), the page shows only "The
-demo backend didn't start…" and the cause goes to the `mock_hsm.embedded` log. Its Overview, Labor and Inventory tabs are read-only;
+(an unusable audit trail, a bind error), the page shows only the Account
+section and "The demo backend didn't start…" and the cause goes to the `mock_hsm.embedded` log. Its Overview, Labor and Inventory tabs are read-only;
 their only POST is the side-effect-free `/labor/rules/validate`. Published
 schedules and POs are read through the GET routes
 `/labor/sites/{site_id}/schedules` and `/inventory/purchase-orders`, which the

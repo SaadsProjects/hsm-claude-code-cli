@@ -161,7 +161,7 @@ def test_loaders_surface_planted_anomaly(base_url):
 
 
 def _run_app(base_url, monkeypatch, user):
-    from streamlit.testing.v1 import AppTest
+    from gate_app import gate_app
 
     # HsmClient binds its default base URL at import time; point it at this test's server.
     monkeypatch.setattr(HsmClient.__init__, "__defaults__", (base_url, 15))
@@ -171,7 +171,7 @@ def _run_app(base_url, monkeypatch, user):
     from dashboard import session
 
     monkeypatch.setattr(session, "client_for", lambda user_id: HsmClient(mint_token(user_id), base_url=base_url))
-    app = AppTest.from_file(str(APP_PATH), default_timeout=30)
+    app = gate_app(APP_PATH, monkeypatch)  # through the sign-in gate (AC4.8.1)
     app.run()
     app.selectbox(key="session-persona").set_value(user)
     app.button(key="session-login").click().run()

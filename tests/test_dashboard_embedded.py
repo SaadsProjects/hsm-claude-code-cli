@@ -19,12 +19,13 @@ from pathlib import Path
 
 import pytest
 import streamlit as st
-from streamlit.testing.v1 import AppTest
 
 sys.path.insert(0, str(Path(__file__).resolve().parent.parent))
 
+from gate_app import gate_app
+
 from agents.hsm_client import HsmClient
-from dashboard import session
+from dashboard import markers, session
 from mock_hsm import embedded
 from mock_hsm.auth import mint_token
 
@@ -87,9 +88,10 @@ def servers(monkeypatch):
     return made
 
 
-def _render():
+def _render(monkeypatch):
+    # Through the sign-in gate as the shared fake allowed visitor (AC4.8.1).
     st.cache_data.clear()
-    at = AppTest.from_file(APP, default_timeout=30)
+    at = gate_app(APP, monkeypatch)
     at.run()
     return at
 
@@ -113,7 +115,9 @@ def _assert_only_screen_4(at):
     assert not at.exception, at.exception
     assert [t.value for t in at.title] == ["HSM labor & inventory"]
     assert [m.value for m in at.markdown] == [SCREEN_4]
-    assert len(at.tabs) == 0 and len(at.selectbox) == 0 and len(at.button) == 0
+    # Only the Account section's Sign out remains as a way out (D11).
+    assert len(at.tabs) == 0 and len(at.selectbox) == 0
+    assert [b.key for b in at.button] == [markers.SIGN_OUT_BUTTON]
 
 
 def test_a_failed_start_shows_only_screen_4_with_no_cause_type_or_address(monkeypatch):
@@ -127,24 +131,41 @@ def test_a_failed_start_shows_only_screen_4_with_no_cause_type_or_address(monkey
         failure_cause=cause,
     )
     monkeypatch.setattr(embedded, "start", lambda port=0: failed)
-    at = _render()
+    at = _render(monkeypatch)
     _assert_only_screen_4(at)
     text = _screen_text(at)
     for leaked in ("PermissionError", "/private/audit", "127.0.0.1", "4242", "Traceback"):
         assert leaked not in text
 
 
-def test_a_real_start_failure_logs_the_cause_and_keeps_it_off_the_screen(monkeypatch, caplog):
-    monkeypatch.setenv("HSM_SIGNING_SECRET", "")
+def test_a_real_start_failure_logs_the_cause_and_keeps_it_off_the_screen(monkeypatch, caplog, tmp_path):
+    # A missing signing secret now stops at the sign-in gate (Screen 5, U3),
+    # before any start, so the real start failure here is an unusable audit
+    # trail: its directory is a regular file.
+    blocker = tmp_path / "not-a-directory"
+    blocker.write_text("")
+    monkeypatch.setenv("HSM_AUDIT_PATH", str(blocker / "audit.jsonl"))
     with caplog.at_level(logging.WARNING, logger="mock_hsm.embedded"):
-        at = _render()
+        at = _render(monkeypatch)
     _assert_only_screen_4(at)
-    assert "embedded backend failed to start: HSM_SIGNING_SECRET is not set" in caplog.text
+    assert "embedded backend failed to start" in caplog.text
+    assert "not-a-directory" not in _screen_text(at)
+
+
+def test_a_missing_signing_secret_stops_at_the_gate_before_any_start(monkeypatch, servers):
+    monkeypatch.setenv("HSM_SIGNING_SECRET", "")
+    at = _render(monkeypatch)
+    assert not at.exception, at.exception
+    assert [m.value for m in at.markdown] == [
+        "Sign-in isn't available right now.",
+        "Reload the page or try again later.",
+    ]
+    assert servers == [] and embedded.current() is None
     assert "HSM_SIGNING_SECRET" not in _screen_text(at)
 
 
-def test_the_caption_shows_the_running_backends_address_and_reruns_keep_one_backend(servers):
-    at = _log_in(_render())
+def test_the_caption_shows_the_running_backends_address_and_reruns_keep_one_backend(servers, monkeypatch):
+    at = _log_in(_render(monkeypatch))
     for _ in range(3):
         at.run()
     assert not at.exception, at.exception
@@ -156,7 +177,7 @@ def test_the_caption_shows_the_running_backends_address_and_reruns_keep_one_back
 
 
 def test_an_unreachable_backend_message_names_no_address_or_start_command(monkeypatch):
-    at = _log_in(_render())
+    at = _log_in(_render(monkeypatch))
 
     def unreachable(user_id):
         client = HsmClient(mint_token(user_id), base_url=embedded.current().address)
@@ -173,7 +194,7 @@ def test_an_unreachable_backend_message_names_no_address_or_start_command(monkey
 
 
 def test_a_backend_lost_between_start_and_render_shows_screen_4_text_not_a_trace(monkeypatch):
-    at = _log_in(_render())
+    at = _log_in(_render(monkeypatch))
     real, calls = session.client_for, []
 
     def lost(user_id):

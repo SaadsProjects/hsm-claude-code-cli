@@ -52,16 +52,20 @@ that's what exposes the HSM tools.
 
 ```bash
 # the dashboard runs its own mock backend in-process (no separate backend or
-# HSM_BASE_URL needed); it doesn't read .env.local itself yet, so export the
-# secret first
-export HSM_SIGNING_SECRET="$(sed -n 's/^HSM_SIGNING_SECRET=//p' .env.local)"
+# HSM_BASE_URL needed) and reads the signing secret from .env.local itself;
+# the sign-in settings come from .streamlit/secrets.toml (git-ignored)
+cp .streamlit/secrets.toml.example .streamlit/secrets.toml   # once
 streamlit run dashboard/app.py
 ```
 
 A Streamlit view of forecasts, labor demand, rosters, published schedules
 (with a Labor Rules Engine compliance check), on-hand stock, usage
-anomalies, reorder needs and submitted POs. Log in by picking a persona in
-the sidebar; that starts a backend session. The backend's site/region scope
+anomalies, reorder needs and submitted POs. A sign-in gate comes first: only
+a Google account whose verified email is on the `HSM_ALLOWED_EMAILS`
+allowlist gets in, and nothing else renders before that (with the example's
+placeholders you see the sign-in screen; a real sign-in needs your own Google
+OAuth client). Inside, pick a demo persona in the sidebar; that starts a
+backend session. The backend's site/region scope
 decides what that persona can see and change. Once logged in, the "Manage
 data" tab adds, edits, deletes and bulk-uploads records, and the "Audit" tab
 lists the audit trail. These overview tabs stay read-only, and the dashboard
