@@ -47,13 +47,9 @@
 
 <!-- Project-specific specialisation. -->
 
-- Staging and production on Streamlit Community Cloud are two apps: staging tracks main, and production tracks a promote-only pointer branch that nobody commits to and that only moves to commits that already passed CI on main; the manual production approval is that gated promotion, not a deploy job. (learned 2026-10-04) <!-- cid:261004-dashboard-deploy-pipelin:practices-discovery:3ac114fb6d47d50b323e4636c4b3615c6132b2b34adcf417889fc2bc12d4bbd3 -->
-
-- Hosted Streamlit Cloud apps are kept public and gated by in-app st.login plus an email allowlist rather than private viewer-allowlisted apps, because the free tier limits private-app slots and two environments are needed. (learned 2026-10-04) <!-- cid:261004-dashboard-deploy-pipelin:requirements-analysis:42217273a0f73eab297c19e42e566cf9dd6ab6b36ed7e8f450486d80686b4514 -->
+- Hosted Streamlit Cloud apps are kept public and gated by in-app st.login plus an email allowlist rather than private viewer-allowlisted apps, because the free tier limits private-app slots. (learned 2026-10-04) <!-- cid:261004-dashboard-deploy-pipelin:requirements-analysis:42217273a0f73eab297c19e42e566cf9dd6ab6b36ed7e8f450486d80686b4514 -->
 
 - Hosted builds identify themselves by commit SHA with a source-fingerprint fallback, so post-deploy checks do not depend on .git being present in the Streamlit Cloud checkout. (learned 2026-10-04) <!-- cid:261004-dashboard-deploy-pipelin:nfr-requirements:ff32013fc9c421424e06f52333d3f45e656036c35c07d8fdb60ba499337190b3 -->
-
-- Production promotion runs as three jobs: a keyless preflight that resolves and verifies the target, an approval-gated deploy job that alone holds the deploy key and only pushes and tags, and a keyless verify job that runs the post-deploy check. (learned 2026-10-04) <!-- cid:261004-dashboard-deploy-pipelin:nfr-design:11236a244e3862b5b272f7985404bbbc7e197b52573646bf8730943dfed322e3 -->
 
 ## Code Style
 

@@ -22,7 +22,7 @@ Placeholders used below:
 
 ## 1. Create the Google OAuth client
 
-Staging gets its own client; never reuse the one for local runs or production.
+Staging gets its own client; never reuse the one for local runs.
 
 1. In the Google Cloud console, set up the OAuth consent screen if the project
    has none: an external app, your own email as the support and developer
@@ -49,8 +49,8 @@ python3 -c "import secrets; print(secrets.token_urlsafe(48))"
 
 `HSM_SIGNING_SECRET` and `cookie_secret` must be different values: run the
 command twice and never paste the same output into both. Never reuse the
-value from your local `.env.local` either; staging and production each get
-their own. If the two are the same, the gate refuses everyone with
+value from your local `.env.local` either; staging gets its own. If the two
+are the same, the gate refuses everyone with
 "Sign-in isn't available right now."
 
 Fill in this block with your values in place of the placeholders. You paste it
