@@ -230,6 +230,10 @@ jobs:
 
   # Always runs so it can be a required check (a required check that never
   # reports would block every PR); it no-ops when no browser test is affected.
+  # The watch list covers every browser test file, tests/conftest.py, and every
+  # project file a browser test reaches through imports or launched scripts,
+  # followed transitively (so all Python under agents/, dashboard/ and
+  # mock_hsm/); tests/test_ci_browser_watch.py fails if one is missing.
   browser-tests:
     runs-on: ubuntu-24.04
     timeout-minutes: 15
@@ -246,7 +250,7 @@ jobs:
         run: |
           if [ "$EVENT" != "pull_request" ]; then echo "run=true" >> "$GITHUB_OUTPUT"; exit 0; fi
           changed=$(git diff --name-only "origin/$BASE_REF...HEAD")
-          if echo "$changed" | grep -Eq '^(scripts/postdeploy_check\.py|dashboard/markers\.py|dashboard/auth_gate\.py|agents/build_info\.py|tests/.*browser.*)$'; then
+          if echo "$changed" | grep -Eq '^((agents|dashboard|mock_hsm)/.*\.py|scripts/postdeploy_check\.py|tests/.*browser.*|tests/conftest\.py|requirements-dev\.txt|\.github/workflows/ci\.yml)$'; then
             echo "run=true" >> "$GITHUB_OUTPUT"
           else
             echo "run=false" >> "$GITHUB_OUTPUT"
@@ -260,8 +264,21 @@ jobs:
           cache-dependency-path: requirements-dev.txt
       - if: steps.need.outputs.run == 'true'
         run: pip install --require-hashes -r requirements-dev.txt
-      # Playwright and Chromium arrive with the post-deploy check (follow-up
-      # work). Until a browser test exists, pytest exits 5 ("no tests ran"),
-      # which is a pass here.
+      # Chromium comes from Playwright and is cached under a key that holds the
+      # Playwright version from the dev lock, so a Playwright upgrade fetches
+      # the browser it expects. This job holds no secrets (contents: read).
+      - id: playwright
+        if: steps.need.outputs.run == 'true'
+        run: echo "version=$(sed -n 's/^playwright==\([^ ]*\).*/\1/p' requirements-dev.txt)" >> "$GITHUB_OUTPUT"
+      - uses: actions/cache@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v6.1.0
+        if: steps.need.outputs.run == 'true'
+        with:
+          path: ~/.cache/ms-playwright
+          key: playwright-${{ runner.os }}-${{ steps.playwright.outputs.version }}
+      # --with-deps installs Chromium's system libraries even on a cache hit.
       - if: steps.need.outputs.run == 'true'
-        run: python -m pytest tests/ -m browser -q || [ $? -eq 5 ]
+        run: python -m playwright install --with-deps chromium
+      # Browser tests exist now, so "no tests ran" (exit 5) fails the job. A
+      # failing test is retried once, as in the tests jobs.
+      - if: steps.need.outputs.run == 'true'
+        run: python -m pytest tests/ -m browser -q --reruns 1

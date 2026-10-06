@@ -157,6 +157,36 @@ Shows the newest 50 entries the persona may see. **Load older** loads more, and
 **Refresh** reloads the newest. The filters narrow only the entries already
 loaded. Pick an entry to see its changes.
 
+## Post-deploy check
+
+`scripts/postdeploy_check.py` checks a deployed copy of this dashboard in
+headless Chromium, as a visitor who is not signed in:
+
+```bash
+python3 scripts/postdeploy_check.py https://<app>.streamlit.app --timeout 120
+```
+
+It finds the screens by the `st-key-<marker>` classes Streamlit gives keyed
+containers (`dashboard/markers.py`). It passes when the `hsm-sign-in-screen`
+block shows and no tab does; any tab, even next to the sign-in screen, fails.
+A pass waits until Streamlit's script run has finished and the page has stayed
+the same for 2 seconds, so tabs drawn after the sign-in screen are still caught.
+While Streamlit Community Cloud shows its sleep or waking page it presses the
+host's wake button once and waits. It never signs in, types or writes, and it
+doesn't read the build caption, which shows only after sign-in.
+
+| Exit | Meaning |
+|------|---------|
+| 0 | `PASS`: the sign-in screen shows and no dashboard tab does |
+| 1 | `FAIL`: tabs show to a signed-out visitor, or the page isn't the dashboard |
+| 2 | bad usage (no URL, not http/https, a timeout that isn't more than 0) |
+| 3 | no answer, still waking, or the page never settled when the timeout ran out |
+| 4 | the browser (Playwright or Chromium) could not start or stopped working; no verdict on the app |
+
+From GitHub: Actions, then `postdeploy`, then "Run workflow" with the URL and
+an optional timeout (default 120 seconds). The job only reads the repository
+and holds no secrets.
+
 ## Tests
 
 ```bash
@@ -164,7 +194,17 @@ loaded. Pick an entry to see its changes.
 .venv/bin/python -m pytest tests/test_dashboard_units.py tests/test_dashboard_app.py -q -m perf   # timing tests only
 .venv/bin/python -m pytest tests/test_auth_gate.py tests/test_secrets_bridge.py tests/test_dashboard_gate.py -q   # the sign-in gate
 .venv/bin/python -m pytest tests/test_build_info.py tests/test_dashboard_build_banner.py -q   # build caption and reset notice
+.venv/bin/python -m pytest tests/test_postdeploy_check.py tests/test_ci_browser_watch.py tests/test_postdeploy_workflow.py -q   # post-deploy check, no browser
+.venv/bin/python -m pytest tests/test_postdeploy_browser.py -m browser -q   # in Chromium; needs `python -m playwright install chromium`
 ```
+
+The browser tests start the real `dashboard/app.py` with `streamlit run
+tests/browser_app.py` on `127.0.0.1` and a free port. `tests/browser_app.py`
+replaces only `auth_gate.current_identity`, with the identity in the
+`HSM_TEST_IDENTITY` environment variable, and each app gets placeholder sign-in
+settings in a temp secrets file, so Google is never contacted. They are
+skipped unless `-m` names `browser`, and the required `browser-tests` CI job
+runs them when a watched file changes.
 
 Every dashboard `AppTest` is built with `tests/gate_app.py`. It gives the app
 placeholder sign-in settings and an allowlist as `AppTest` secrets and

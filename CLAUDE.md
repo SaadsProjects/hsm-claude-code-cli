@@ -36,7 +36,8 @@ scripts/dev-secret.sh                    # once per clone: writes HSM_SIGNING_SE
 python3 -m mock_hsm.server &             # mock backend on 127.0.0.1:8770 (or scripts/start_mock_server.sh [--port N])
 python3 -m pytest tests/ -q              # all tests; they start their own mock servers (:8772, :8773, one ephemeral)
 python3 -m pytest tests/ -q -m perf      # the timing tests, which are skipped by default
-python3 -m pytest tests/ -q -m browser   # Playwright tests, skipped by default (need Chromium)
+python3 -m pytest tests/ -q -m browser   # Playwright tests, skipped by default (run `python -m playwright install chromium` once first)
+python3 scripts/postdeploy_check.py <url> [--timeout 120]   # read-only post-deploy check; also the manual `postdeploy` workflow
 python3 -m pytest tests/test_labor_rules.py -k overnight  # a single test
 ruff check .                             # lint (same check the commit hook runs; rules pinned in ruff.toml)
 ruff format --check .                    # formatting, checked in CI
@@ -249,7 +250,17 @@ except `matrix` is meant to be a required check:
   is set) run with one retry and the `.test-floor` check. `coverage-gate`
   checks coverage against `.coverage-floor` and the 80% gate.
 - **Browser tests:** `browser-tests` always reports, so it can be required, and
-  passes without running anything unless a browser-check file changed.
+  passes without running anything unless a watched file changed. When it runs,
+  it installs Chromium (cached per Playwright version) and runs `-m browser`
+  with one retry; "no tests ran" fails it. `tests/test_ci_browser_watch.py`
+  fails if a browser test file, `tests/conftest.py`, or any project file a
+  browser test reaches through imports or launched scripts (followed
+  transitively) is off its watch list, which today means all Python under
+  `agents/`, `dashboard/` and `mock_hsm/`.
+
+`.github/workflows/postdeploy.yml` is a manual (`workflow_dispatch`) run of
+`scripts/postdeploy_check.py` against a URL; it is not a required check and
+holds no secrets.
 
 The CI gate scripts live in `scripts/`. Their tests are `tests/test_ci_*.py`,
 loaded through `tests/ci_scripts.py`.

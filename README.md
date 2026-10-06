@@ -71,6 +71,24 @@ data" tab adds, edits, deletes and bulk-uploads records, and the "Audit" tab
 lists the audit trail. These overview tabs stay read-only, and the dashboard
 never publishes or submits. See `dashboard/README.md` for details.
 
+### Post-deploy check
+
+```bash
+python -m playwright install chromium        # once, after installing the dev lock
+python3 scripts/postdeploy_check.py https://<app>.streamlit.app --timeout 120
+```
+
+A read-only check of a deployed dashboard in headless Chromium. It loads the
+page as a visitor who is not signed in and passes only when the sign-in screen
+shows and no dashboard tab does. It never signs in, never types into the page
+and never writes data; the only thing it ever clicks is the host's own wake
+button when the app is asleep, and it waits while the host wakes the app.
+Exit codes: `0` passed, `1` a check failed (tabs showed, or the page isn't the
+dashboard), `2` bad usage, `3` no answer, still waking or never settled at the
+timeout, `4` the browser could not start (no verdict on the app). To
+run it from GitHub, start the `postdeploy` workflow from the Actions tab with
+the app URL (and optionally a timeout); it holds no secrets.
+
 ### Audit trail
 
 The mock backend records every schedule-publish and purchase-order attempt
@@ -327,6 +345,8 @@ tests/test_mcp_tools.py         protocol-level test, no LLM required
 tests/conftest.py               per-test temporary audit trail (HSM_AUDIT_PATH); resets U1 writes after each test;
                                 skips the `perf` timing tests unless run with `-m perf`
 tests/test_writes_*.py          dashboard data writes: building blocks, write service, HTTP routes and perf
+scripts/postdeploy_check.py     read-only post-deploy check in Chromium (manual workflow: .github/workflows/postdeploy.yml)
+tests/*browser*.py              Playwright tests, run with `-m browser` (browser_app.py: the app behind a fake identity)
 docs/ARCHITECTURE.md            call-flow diagrams for each subagent
 ```
 

@@ -17,6 +17,10 @@ mcp[cli]==1.30.0
 ruff==0.16.8
 
 pytest==9.1.1
+# Browser tests (`-m browser`) and scripts/postdeploy_check.py drive Chromium
+# through Playwright; fetch the browser once with
+# `python -m playwright install chromium`.
+playwright==1.63.0
 pytest-rerunfailures  # CI retries a failing test once (--reruns 1)
 coverage  # line coverage with subprocess measurement (.coveragerc)
 
