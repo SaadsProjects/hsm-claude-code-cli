@@ -260,7 +260,10 @@ except `matrix` is meant to be a required check:
 
 `.github/workflows/postdeploy.yml` is a manual (`workflow_dispatch`) run of
 `scripts/postdeploy_check.py` against a URL; it is not a required check and
-holds no secrets.
+holds no secrets. `.github/workflows/staging-check.yml` runs the same check
+automatically after every push to `main`: it waits 3 minutes for staging to
+redeploy, then checks `vars.STAGING_URL` (it fails while that variable is
+unset). It runs after the merge, so it can't be a required check either.
 `docs/staging-app.md` is the owner's runbook for creating and proving the staging app.
 
 The CI gate scripts live in `scripts/`. Their tests are `tests/test_ci_*.py`,
