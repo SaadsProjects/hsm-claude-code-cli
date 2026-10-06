@@ -9,7 +9,7 @@
 # 2.x line renamed FastMCP to MCPServer with a different API. The [cli] extra
 # pulls in typer/uvicorn for the optional `mcp dev` Inspector command.
 # Claude Code supplies the model connection; no anthropic SDK is needed.
-mcp[cli]==1.30.0
+mcp[cli]==2.3.0
 
 # ruff is the linter and formatter; .claude/hooks/lint_before_commit.py runs
 # it before every commit and fails closed if it is missing. CI runs the same
