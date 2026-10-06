@@ -181,6 +181,17 @@ def test_runbook_checks_a_later_merge_redeploys_staging():
     assert matching, "no step confirms that a later merge to main redeploys staging"
 
 
+def test_runbook_sets_the_staging_url_for_the_automatic_check():
+    # staging-check.yml reads the URL from this repository variable and fails
+    # every run until the owner sets it.
+    matching = [
+        block
+        for block in paragraphs(runbook())
+        if "STAGING_URL" in block and "staging-check" in block and "https://<staging-app>.streamlit.app" in block
+    ]
+    assert matching, "the runbook doesn't say to set STAGING_URL for the staging-check workflow"
+
+
 def test_runbook_uses_placeholders_only():
     text = runbook()
     emails = re.findall(r"[\w.+-]+@[\w-]+(?:\.[\w-]+)+", text)

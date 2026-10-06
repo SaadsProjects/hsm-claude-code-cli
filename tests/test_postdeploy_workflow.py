@@ -48,6 +48,8 @@ def test_permissions_are_read_only():
     # Every grant anywhere in the file: only the job's contents: read.
     grants = re.findall(r"^\s+(\S+):\s*(read|write|none)\s*$", text(), flags=re.MULTILINE)
     assert grants == [("contents", "read")]
+    # The regex above can't see a blanket grant such as `permissions: write-all`.
+    assert not re.search(r"\b(read|write)-all\b", text())
 
 
 def test_holds_no_secrets():

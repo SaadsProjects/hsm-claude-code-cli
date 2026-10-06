@@ -1,0 +1,57 @@
+# Automatic staging check: after every merge to main, wait for Streamlit
+# Community Cloud to redeploy staging, then run the read-only post-deploy check
+# (scripts/postdeploy_check.py, contract C8) against it. Streamlit gives no
+# "redeploy finished" signal and the check can't see the build caption (that
+# shows only after sign-in), so it waits a fixed 3 minutes first; the owner
+# confirms the build by signing in. A failure is a red run on the commit and a
+# GitHub email to whoever merged. It never signs in and never writes data, so
+# the job holds no secrets and only reads the repository. The URL comes from
+# the STAGING_URL repository variable and reaches the shell through env.
+# Checks of any other URL, or re-runs by hand, use postdeploy.yml.
+name: staging-check
+
+on:
+  push:
+    branches: [main]
+
+concurrency:
+  group: staging-check
+  cancel-in-progress: true
+
+permissions: {}
+
+env:
+  PIP_DISABLE_PIP_VERSION_CHECK: "1"
+
+jobs:
+  staging-check:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 20
+    permissions:
+      contents: read
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+      - uses: actions/setup-python@5fda3b95a4ea91299a34e894583c3862153e4b97 # v7.0.0
+        with:
+          python-version: "3.14"
+          cache: pip
+          cache-dependency-path: requirements-dev.txt
+      - run: pip install --require-hashes -r requirements-dev.txt
+      # Same Chromium cache as the browser-tests job in ci.yml and as
+      # postdeploy.yml: keyed on the Playwright version from the dev lock.
+      - id: playwright
+        run: echo "version=$(sed -n 's/^playwright==\([^ ]*\).*/\1/p' requirements-dev.txt)" >> "$GITHUB_OUTPUT"
+      - uses: actions/cache@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v6.1.0
+        with:
+          path: ~/.cache/ms-playwright
+          key: playwright-${{ runner.os }}-${{ steps.playwright.outputs.version }}
+      - run: python -m playwright install --with-deps chromium
+      - name: Staging check
+        env:
+          URL: ${{ vars.STAGING_URL }}
+        run: |
+          [ -n "$URL" ] || { echo "::error::The STAGING_URL repository variable is not set"; exit 1; }
+          sleep 180
+          python scripts/postdeploy_check.py "$URL" --timeout 600

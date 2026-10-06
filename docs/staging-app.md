@@ -152,10 +152,25 @@ Also stopwatch your own sign-in in (c) from the moment the page wakes. Record
 both times, and record a miss rather than hiding it. This timed run from a
 sleeping app is what closes NFR2; until it is recorded, NFR2 stays open.
 
+## 5. Turn on the automatic check
+
+After every merge to `main`, the `staging-check` workflow waits 3 minutes for
+staging to redeploy, then runs the post-deploy check against it. It reads the
+address from a repository variable, so set it once: in GitHub, Settings >
+Secrets and variables > Actions > Variables, add `STAGING_URL` with the value
+`https://<staging-app>.streamlit.app`. Until it is set, every `staging-check`
+run fails, saying the variable is missing.
+
+A failed run shows on the merge commit, and GitHub emails whoever merged.
+Re-run it once from the Actions tab first, because a slow redeploy can outlast
+the 3-minute wait. If it fails again, roll back. The check still can't see the
+build, so sign in and read the `Build` caption to be sure the merge is live.
+
 ## Rollback
 
 - A bad change on staging: revert it on `main` through a pull request, let the
-  app redeploy, then run step 4 (a) again.
+  app redeploy, then let `staging-check` run on the revert (or run step 4 (a)
+  again).
 - If the gate ever lets in someone it shouldn't: delete the app first, or
   set `HSM_ALLOWED_EMAILS = []` (an empty allowlist fails closed and refuses
   everyone), and
