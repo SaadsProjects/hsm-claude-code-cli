@@ -51,20 +51,44 @@ that's what exposes the HSM tools.
 ### Dashboard
 
 ```bash
-# with the mock backend running (or HSM_BASE_URL pointing elsewhere); the
-# dashboard doesn't read .env.local itself yet, so export the secret first
-export HSM_SIGNING_SECRET="$(sed -n 's/^HSM_SIGNING_SECRET=//p' .env.local)"
+# the dashboard runs its own mock backend in-process (no separate backend or
+# HSM_BASE_URL needed) and reads the signing secret from .env.local itself;
+# the sign-in settings come from .streamlit/secrets.toml (git-ignored)
+cp .streamlit/secrets.toml.example .streamlit/secrets.toml   # once
 streamlit run dashboard/app.py
 ```
 
 A Streamlit view of forecasts, labor demand, rosters, published schedules
 (with a Labor Rules Engine compliance check), on-hand stock, usage
-anomalies, reorder needs and submitted POs. Log in by picking a persona in
-the sidebar; that starts a backend session. The backend's site/region scope
+anomalies, reorder needs and submitted POs. A sign-in gate comes first: only
+a Google account whose verified email is on the `HSM_ALLOWED_EMAILS`
+allowlist gets in, and nothing else renders before that (with the example's
+placeholders you see the sign-in screen; a real sign-in needs your own Google
+OAuth client). Inside, pick a demo persona in the sidebar; that starts a
+backend session. The backend's site/region scope
 decides what that persona can see and change. Once logged in, the "Manage
 data" tab adds, edits, deletes and bulk-uploads records, and the "Audit" tab
 lists the audit trail. These overview tabs stay read-only, and the dashboard
 never publishes or submits. See `dashboard/README.md` for details.
+
+### Post-deploy check
+
+```bash
+python -m playwright install chromium        # once, after installing the dev lock
+python3 scripts/postdeploy_check.py https://<app>.streamlit.app --timeout 120
+```
+
+A read-only check of a deployed dashboard in headless Chromium. It loads the
+page as a visitor who is not signed in and passes only when the sign-in screen
+shows and no dashboard tab does. It never signs in, never types into the page
+and never writes data; the only thing it ever clicks is the host's own wake
+button when the app is asleep, and it waits while the host wakes the app.
+Exit codes: `0` passed, `1` a check failed (tabs showed, or the page isn't the
+dashboard), `2` bad usage, `3` no answer, still waking or never settled at the
+timeout, `4` the browser could not start (no verdict on the app). To
+run it from GitHub, start the `postdeploy` workflow from the Actions tab with
+the app URL (and optionally a timeout); it holds no secrets.
+To create the staging app and prove it, follow [docs/staging-app.md](docs/staging-app.md).
 
 ### Audit trail
 
@@ -306,7 +330,8 @@ Everything in this project was built and verified in this environment:
 
 ```
 mock_hsm/                       mock HSM REST backend (audit.py: append-only audit trail;
-                                writes.py: dashboard data writes and sessions)
+                                writes.py: dashboard data writes and sessions;
+                                embedded.py: the backend the dashboard runs in its own process)
 agents/hsm_client.py            REST client used by the MCP tools
 agents/labor_scheduling_agent.py   pure demand-calculation function only
 agents/inventory_agent.py          pure anomaly/reorder-calculation functions only
@@ -321,6 +346,8 @@ tests/test_mcp_tools.py         protocol-level test, no LLM required
 tests/conftest.py               per-test temporary audit trail (HSM_AUDIT_PATH); resets U1 writes after each test;
                                 skips the `perf` timing tests unless run with `-m perf`
 tests/test_writes_*.py          dashboard data writes: building blocks, write service, HTTP routes and perf
+scripts/postdeploy_check.py     read-only post-deploy check in Chromium (manual workflow: .github/workflows/postdeploy.yml)
+tests/*browser*.py              Playwright tests, run with `-m browser` (browser_app.py: the app behind a fake identity)
 docs/ARCHITECTURE.md            call-flow diagrams for each subagent
 ```
 

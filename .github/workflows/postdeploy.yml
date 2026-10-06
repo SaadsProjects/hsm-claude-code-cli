@@ -1,0 +1,56 @@
+# Post-deploy check, run by hand from the Actions tab (contract C8, plan K10).
+# Loads the given app URL in headless Chromium as a visitor who is not signed
+# in and passes only when the sign-in screen shows and no dashboard tab does
+# (scripts/postdeploy_check.py). It never signs in and never writes data, so
+# the job holds no secrets and only reads the repository. The URL and timeout
+# reach the shell through env, never spliced into the command.
+name: postdeploy
+
+on:
+  workflow_dispatch:
+    inputs:
+      url:
+        description: "The app's address, for example https://<app>.streamlit.app"
+        required: true
+        type: string
+      timeout:
+        description: "Seconds to wait for the app to answer or wake from sleep"
+        required: false
+        default: "120"
+        type: string
+
+permissions: {}
+
+env:
+  PIP_DISABLE_PIP_VERSION_CHECK: "1"
+
+jobs:
+  postdeploy-check:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 15
+    permissions:
+      contents: read
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+      - uses: actions/setup-python@5fda3b95a4ea91299a34e894583c3862153e4b97 # v7.0.0
+        with:
+          python-version: "3.14"
+          cache: pip
+          cache-dependency-path: requirements-dev.txt
+      - run: pip install --require-hashes -r requirements-dev.txt
+      # Same Chromium cache as the browser-tests job in ci.yml: keyed on the
+      # Playwright version from the dev lock.
+      - id: playwright
+        run: echo "version=$(sed -n 's/^playwright==\([^ ]*\).*/\1/p' requirements-dev.txt)" >> "$GITHUB_OUTPUT"
+      - uses: actions/cache@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v6.1.0
+        with:
+          path: ~/.cache/ms-playwright
+          key: playwright-${{ runner.os }}-${{ steps.playwright.outputs.version }}
+      - run: python -m playwright install --with-deps chromium
+      - name: Post-deploy check
+        env:
+          URL: ${{ inputs.url }}
+          TIMEOUT: ${{ inputs.timeout }}
+        run: python scripts/postdeploy_check.py "$URL" --timeout "$TIMEOUT"

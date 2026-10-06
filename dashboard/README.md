@@ -1,7 +1,8 @@
 # HSM dashboard
 
-A Streamlit dashboard over the HSM labor and inventory services. You log in as
-a persona. The Overview, Labor and Inventory tabs are read-only. **Manage data**
+A Streamlit dashboard over the HSM labor and inventory services. You sign in
+with Google, and only allowlisted email addresses get in; inside, you act as a
+demo persona. The Overview, Labor and Inventory tabs are read-only. **Manage data**
 adds, edits, deletes and bulk-uploads reference data. **Audit** lists the audit
 trail. The dashboard never publishes schedules or submits purchase orders.
 
@@ -10,33 +11,104 @@ trail. The dashboard never publishes schedules or submits purchase orders.
 ```bash
 pip install --require-hashes -r requirements-dev.txt   # includes streamlit 1.64
 scripts/dev-secret.sh                                 # once: HSM_SIGNING_SECRET into .env.local
-python3 -m mock_hsm.server &                          # mock backend on 127.0.0.1:8770
-export HSM_SIGNING_SECRET="$(sed -n 's/^HSM_SIGNING_SECRET=//p' .env.local)"
+cp .streamlit/secrets.toml.example .streamlit/secrets.toml   # once: sign-in settings (git-ignored)
 streamlit run dashboard/app.py --server.address 127.0.0.1
 ```
 
 Tokens are signed with `HSM_SIGNING_SECRET`, and there is no default. The
-backend reads it from `.env.local` (written by `scripts/dev-secret.sh`) when it
-isn't exported. The dashboard mints its tokens in its own process and doesn't
-read `.env.local` yet, so export the same value in the dashboard's shell, as
-above. Without it, logging in fails with an error naming `HSM_SIGNING_SECRET`.
+dashboard takes it from the first source that has it: an exported value, then
+`HSM_SIGNING_SECRET` in the Streamlit secrets (how the hosted apps get it),
+then `.env.local` (written by `scripts/dev-secret.sh`). Nothing needs
+exporting locally. The secrets example sets no signing secret on purpose, so
+a local copy never shadows `.env.local`. If you do put `HSM_SIGNING_SECRET` in
+`.streamlit/secrets.toml`, it replaces an exported value: Streamlit copies
+top-level secrets into the environment itself, and removing that line while
+the app runs unsets the variable until the app restarts.
 
-Every read and write goes through `HsmClient`. Set `HSM_BASE_URL` to point it
-at another backend.
+No separate backend is needed. The dashboard starts the mock backend inside
+its own process (`mock_hsm/embedded.py`) at the top of every render: one per
+process, bound to `127.0.0.1` on a free port. Every read and write goes through
+`HsmClient`, addressed by `session.client_for` to that backend; `HSM_BASE_URL`
+is not read (it is for the MCP server and the hooks, which use
+`python3 -m mock_hsm.server`). The sidebar caption shows the backend's address.
+The audit trail goes to `HSM_AUDIT_PATH` when it is set, otherwise to
+`<system temp>/hsm-demo-<uid>/audit.jsonl`, in a directory the dashboard
+creates with mode 0700.
+
+The backend starts only after the sign-in gate lets the visitor in. If it
+can't start (for example the audit trail is unusable), the page shows only
+the Account section and "The demo backend didn't start. Reload the page or
+try again later." The cause is logged as a warning by the `mock_hsm.embedded`
+logger.
 
 ### Reach
 
 `.streamlit/config.toml` makes the dashboard listen on this machine only
 (`server.address = "127.0.0.1"`). It also makes Streamlit refuse uploads over
-2 MB (`server.maxUploadSize = 2`). The persona picker is not a sign-in: anyone who
-can open the page can log in as any persona. To open the dashboard to your network on
-purpose, start it with `--server.address 0.0.0.0`, and only on a network you
-trust.
+2 MB (`server.maxUploadSize = 2`). The persona picker is not a sign-in; the
+sign-in gate below is, and anyone it lets in can pick any persona, including
+the system administrator. To open the dashboard to your network on purpose,
+start it with `--server.address 0.0.0.0`, and only on a network you trust.
 
-## Log in
+## Sign in
 
-1. In the sidebar, pick a persona and click **Log in**. This starts a backend
-   session. The tabs appear only while you are logged in.
+Every rerun starts with the sign-in gate (`dashboard/auth_gate.py`). Nothing
+else renders, and the backend isn't started, until it lets the visitor in:
+
+- **Signed out:** "Access to this demo is by invitation." and **Sign in with
+  Google** (Streamlit's `st.login("google")`).
+- **Signed in, not allowed:** the email isn't on the allowlist, or Google
+  doesn't report it as verified. The page says "This account doesn't have
+  access.", shows the address, and offers **Sign out**.
+- **Sign-in unavailable:** the signing secret is missing or too short, it
+  equals `auth.cookie_secret`, a sign-in setting is missing or blank, the
+  allowlist is empty or malformed, or the gate itself failed. The page says
+  "Sign-in isn't available right now." with no detail; **Sign out** is offered
+  only if someone is signed in. The `dashboard.auth_gate` logger records the
+  reason (and the setting names or error type), never an email or a value.
+- **Allowed:** the sidebar starts with **Account** (the email and **Sign
+  out**), then **Demo persona**.
+
+The sign-in settings and the allowlist come from Streamlit secrets; the keys
+are in `.streamlit/secrets.toml.example`. `HSM_ALLOWED_EMAILS` lists exact
+addresses (trimmed and lower-cased; no domains or wildcards). With the
+example's placeholders the gate shows its sign-in screen. A real local sign-in
+needs your own Google OAuth client with the redirect
+`http://localhost:8501/oauth2callback`, and your address in the allowlist.
+Without a `.streamlit/secrets.toml` the page shows "Sign-in isn't available
+right now.", the fail-closed result.
+
+**Sign out** ends the persona's backend session, clears this browser session's
+dashboard state, then signs out of Google. A different account signing in on
+the same tab starts with no persona selected.
+
+## Build caption and demo-data notice
+
+Once the gate lets you in, the last line of the sidebar names the running
+build, under the backend caption: "Build abc1234" (the first 7 characters of
+the git commit) or, when the checkout has no usable `.git`, "Build src-1a2b3c4d"
+(the first 8 characters of a SHA-256 fingerprint of the source the app runs).
+`agents/build_info.py` reads `.git` with file reads only, so no git binary is
+needed. To see the same label from a shell:
+
+```bash
+python3 -m agents.build_info
+```
+
+The build is worked out once per process. If that fails, the caption reads
+"Build unknown" and the `dashboard.app` logger records only the error type. The
+caption also shows when the backend didn't start, under the Account section.
+
+Above the tabs, on every tab and before a persona logs in, an info notice says
+"Demo data: changes you make are reset periodically." The hosted demo keeps its
+data in memory, so a restart or redeploy resets it. Neither the caption nor the
+notice shows on the sign-in screens.
+
+## Log in as a persona
+
+1. In the sidebar, under **Demo persona**, pick a persona and click **Log
+   in**. This starts a backend session. The tabs appear only while you are
+   logged in, and the caption reads "Acting as {name} ({persona})".
 2. Each time the page refreshes, the dashboard checks the session. A session
    ends after 15 minutes without a save, and the dashboard then logs you out
    and says why.
@@ -85,9 +157,58 @@ Shows the newest 50 entries the persona may see. **Load older** loads more, and
 **Refresh** reloads the newest. The filters narrow only the entries already
 loaded. Pick an entry to see its changes.
 
+## Post-deploy check
+
+`scripts/postdeploy_check.py` checks a deployed copy of this dashboard in
+headless Chromium, as a visitor who is not signed in:
+
+```bash
+python3 scripts/postdeploy_check.py https://<app>.streamlit.app --timeout 120
+```
+
+It finds the screens by the `st-key-<marker>` classes Streamlit gives keyed
+containers (`dashboard/markers.py`). It passes when the `hsm-sign-in-screen`
+block shows and no tab does; any tab, even next to the sign-in screen, fails.
+A pass waits until Streamlit's script run has finished and the page has stayed
+the same for 2 seconds, so tabs drawn after the sign-in screen are still caught.
+While Streamlit Community Cloud shows its sleep or waking page it presses the
+host's wake button once and waits. It never signs in, types or writes, and it
+doesn't read the build caption, which shows only after sign-in.
+
+| Exit | Meaning |
+|------|---------|
+| 0 | `PASS`: the sign-in screen shows and no dashboard tab does |
+| 1 | `FAIL`: tabs show to a signed-out visitor, or the page isn't the dashboard |
+| 2 | bad usage (no URL, not http/https, a timeout that isn't more than 0) |
+| 3 | no answer, still waking, or the page never settled when the timeout ran out |
+| 4 | the browser (Playwright or Chromium) could not start or stopped working; no verdict on the app |
+
+From GitHub: Actions, then `postdeploy`, then "Run workflow" with the URL and
+an optional timeout (default 120 seconds). The job only reads the repository
+and holds no secrets.
+
 ## Tests
 
 ```bash
 .venv/bin/python -m pytest tests/test_dashboard_units.py tests/test_dashboard_app.py -q           # timing tests skipped
 .venv/bin/python -m pytest tests/test_dashboard_units.py tests/test_dashboard_app.py -q -m perf   # timing tests only
+.venv/bin/python -m pytest tests/test_auth_gate.py tests/test_secrets_bridge.py tests/test_dashboard_gate.py -q   # the sign-in gate
+.venv/bin/python -m pytest tests/test_build_info.py tests/test_dashboard_build_banner.py -q   # build caption and reset notice
+.venv/bin/python -m pytest tests/test_postdeploy_check.py tests/test_ci_browser_watch.py tests/test_postdeploy_workflow.py -q   # post-deploy check, no browser
+.venv/bin/python -m pytest tests/test_postdeploy_browser.py -m browser -q   # in Chromium; needs `python -m playwright install chromium`
 ```
+
+The browser tests start the real `dashboard/app.py` with `streamlit run
+tests/browser_app.py` on `127.0.0.1` and a free port. `tests/browser_app.py`
+replaces only `auth_gate.current_identity`, with the identity in the
+`HSM_TEST_IDENTITY` environment variable, and each app gets placeholder sign-in
+settings in a temp secrets file, so Google is never contacted. They are
+skipped unless `-m` names `browser`, and the required `browser-tests` CI job
+runs them when a watched file changes.
+
+Every dashboard `AppTest` is built with `tests/gate_app.py`. It gives the app
+placeholder sign-in settings and an allowlist as `AppTest` secrets and
+replaces only the identity seam (`auth_gate.current_identity`, `sign_in` and
+`sign_out`) with a fake identity, allowed by default. Everything else of the
+gate runs for real, so a test that builds its app another way meets the real
+gate and gets "Sign-in isn't available right now."

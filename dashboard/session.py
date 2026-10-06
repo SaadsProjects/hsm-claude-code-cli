@@ -23,6 +23,7 @@ from datetime import datetime, timedelta, timezone
 import streamlit as st
 
 from agents.hsm_client import HsmClient
+from mock_hsm import embedded
 from mock_hsm.auth import mint_token
 
 # login: None when logged out, else {session_id, user_id, persona}. notice:
@@ -49,9 +50,17 @@ def _now():
 
 
 def client_for(user_id):
-    """An HsmClient carrying ``user_id``'s token. The base URL is the
-    client's default, ``HSM_BASE_URL``."""
-    return HsmClient(mint_token(user_id))
+    """An HsmClient carrying ``user_id``'s token, addressed to the backend
+    running in this process (``mock_hsm.embedded``), never ``HSM_BASE_URL``.
+
+    The address is read from the live instance on every call, because a
+    replaced backend listens on a new port. With no live backend this raises
+    ``BackendNotRunning``; it never starts one (the start belongs to the
+    render, before any screen reads data)."""
+    backend = embedded.current()
+    if backend is None:
+        raise embedded.BackendNotRunning("the embedded backend is not running")
+    return HsmClient(mint_token(user_id), base_url=backend.address)
 
 
 def state_of(state=None):

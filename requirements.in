@@ -2,4 +2,4 @@
 # Community Cloud reads the compiled requirements.txt). Compile with:
 #   uv pip compile requirements.in --universal --generate-hashes --python-version 3.10 --no-header -o requirements.txt
 # The mock HSM server and REST client are stdlib-only (http.server, urllib).
-streamlit==1.64.0  # dashboard/ UI (AppTest tests run on 1.64); brings pandas and altair
+streamlit[auth]==1.64.0  # dashboard/ UI (AppTest tests run on 1.64); brings pandas and altair

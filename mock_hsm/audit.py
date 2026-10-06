@@ -8,7 +8,8 @@ operations: ``configure`` (point at a file and initialize), ``append``
 (record one entry, durably, before returning), ``append_batch`` (record a
 bulk file's entries as one durable line: all of them or none, even across a
 crash) and ``page`` (read one page of the scope-filtered, newest-first
-view). There is deliberately no update or delete; the only removal path is
+view), plus the read-only query ``unavailable_reason``. There is
+deliberately no update or delete; the only removal path is
 the internal 90-day retention purge, which no caller can trigger directly.
 
 Storage layout: one line per append call,
@@ -417,6 +418,17 @@ def configure(path=None, clock=None):
     tests)."""
     with _purge_mutex, _lock:
         _configure_locked(path, clock)
+
+
+def unavailable_reason():
+    """The reason the configured trail is unavailable, or ``None``.
+
+    Read-only: ``configure`` never raises, so a caller that must know whether
+    the trail is usable (the embedded backend's start and liveness check)
+    reads the outcome back here. ``None`` also before the first configure,
+    because nothing has failed yet."""
+    state = _current.state
+    return None if state is None else state.unavailable
 
 
 def _configure_locked(path, clock):
