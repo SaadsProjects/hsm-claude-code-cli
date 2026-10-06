@@ -82,6 +82,28 @@ right now.", the fail-closed result.
 dashboard state, then signs out of Google. A different account signing in on
 the same tab starts with no persona selected.
 
+## Build caption and demo-data notice
+
+Once the gate lets you in, the last line of the sidebar names the running
+build, under the backend caption: "Build abc1234" (the first 7 characters of
+the git commit) or, when the checkout has no usable `.git`, "Build src-1a2b3c4d"
+(the first 8 characters of a SHA-256 fingerprint of the source the app runs).
+`agents/build_info.py` reads `.git` with file reads only, so no git binary is
+needed. To see the same label from a shell:
+
+```bash
+python3 -m agents.build_info
+```
+
+The build is worked out once per process. If that fails, the caption reads
+"Build unknown" and the `dashboard.app` logger records only the error type. The
+caption also shows when the backend didn't start, under the Account section.
+
+Above the tabs, on every tab and before a persona logs in, an info notice says
+"Demo data: changes you make are reset periodically." The hosted demo keeps its
+data in memory, so a restart or redeploy resets it. Neither the caption nor the
+notice shows on the sign-in screens.
+
 ## Log in as a persona
 
 1. In the sidebar, under **Demo persona**, pick a persona and click **Log
@@ -141,6 +163,7 @@ loaded. Pick an entry to see its changes.
 .venv/bin/python -m pytest tests/test_dashboard_units.py tests/test_dashboard_app.py -q           # timing tests skipped
 .venv/bin/python -m pytest tests/test_dashboard_units.py tests/test_dashboard_app.py -q -m perf   # timing tests only
 .venv/bin/python -m pytest tests/test_auth_gate.py tests/test_secrets_bridge.py tests/test_dashboard_gate.py -q   # the sign-in gate
+.venv/bin/python -m pytest tests/test_build_info.py tests/test_dashboard_build_banner.py -q   # build caption and reset notice
 ```
 
 Every dashboard `AppTest` is built with `tests/gate_app.py`. It gives the app

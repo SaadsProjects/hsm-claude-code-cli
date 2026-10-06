@@ -174,6 +174,10 @@ calculation functions. It runs its own mock backend inside its process
 (`mock_hsm/embedded.py`): `embedded.start()` runs at the top of every render
 and hosts `mock_hsm.server.Handler` on `127.0.0.1` on a free port, one per
 process, and `session.client_for` takes its address from `embedded.current()`.
+The sidebar's last caption is the running build from `agents/build_info.py`
+(git commit read from `.git` without a subprocess, else a source fingerprint;
+`python3 -m agents.build_info` prints the same label), and a demo-data reset
+notice sits above the tabs.
 The dashboard never reads `HSM_BASE_URL`, which is for the MCP server and the
 hooks, and it doesn't need `python3 -m mock_hsm.server`. If the start fails
 (an unusable audit trail, a bind error), the page shows only the Account

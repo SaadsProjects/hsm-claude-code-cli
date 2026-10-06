@@ -22,6 +22,7 @@ and Audit lists the audit trail (unit U4; see dashboard/README.md). The
 dashboard never publishes schedules or submits purchase orders.
 """
 
+import logging
 import os
 import sys
 import urllib.error
@@ -33,8 +34,9 @@ import altair as alt
 import pandas as pd
 import streamlit as st
 
+from agents import build_info
 from agents.hsm_client import HsmApiError
-from dashboard import actions, audit_tab, auth_gate, data, manage_tab, session
+from dashboard import actions, audit_tab, auth_gate, data, manage_tab, markers, session
 from dashboard.safe_text import escape_md
 from mock_hsm import embedded
 
@@ -43,9 +45,15 @@ from mock_hsm import embedded
 # dashboard *data* comes from mock_hsm.db.
 from mock_hsm.db import USERS
 
+LOG = logging.getLogger("dashboard.app")
+
 CACHE_TTL_SECONDS = 60
 # Screen 4: fixed text only; the cause is in the log (mock_hsm.embedded logs it).
 BACKEND_FAILED = "The demo backend didn't start. Reload the page or try again later."
+BUILD_UNKNOWN = "Build unknown"
+# FR6.1: the hosted demo keeps its data in memory, so it resets on restart or redeploy.
+RESET_BANNER_TEXT = "Demo data: changes you make are reset periodically."
+RESET_BANNER_ICON = "\u2139\ufe0f"  # the "information source" emoji, escaped so ruff (RUF001) reads it unambiguously
 
 # Categorical slots in fixed order, plus the reserved "critical" status color.
 SERIES = ["#2a78d6", "#eb6834", "#1baf7a", "#eda100"]
@@ -411,6 +419,15 @@ def _session_panel(login):
         actions.then_rerun(actions.log_out)
 
 
+def _reset_banner(slot):
+    """The demo-data reset notice (C5): first in the main area on Screen 3, so
+    it sits above the unsaved-write notice and outside the tabs, on every tab.
+    The icon keeps it readable without colour (AC6.1.2). It is drawn into a
+    placeholder so a backend lost mid-render can take it away again."""
+    with slot.container(key=markers.RESET_BANNER):
+        st.info(RESET_BANNER_TEXT, icon=RESET_BANNER_ICON)
+
+
 def _banner():
     """The unsaved-write banner (WF8), drawn above the tabs on every run."""
     held = session.pending_retry()
@@ -457,6 +474,17 @@ def _guarded_tab(draw, *args):
 
 
 # --------------------------------------------------------------------- main
+def _build_caption():
+    """The sidebar's last block on Screens 3 and 4 (C5): which build is running."""
+    try:
+        label = build_info.build_info().label
+    except Exception as e:  # noqa: BLE001 -- a caption must never break the signed-in frame; shown as "Build unknown"
+        LOG.warning("build identifier unavailable (%s)", type(e).__name__)
+        label = BUILD_UNKNOWN
+    with st.sidebar, st.container(key=markers.BUILD_CAPTION):
+        st.caption(label)
+
+
 def _page_header():
     st.set_page_config(page_title="HSM Dashboard", layout="wide")
     st.title("HSM labor & inventory")
@@ -488,7 +516,9 @@ def main(identity):
         sites = load_sites(user_id)
         if not sites:
             st.warning("This persona has no sites in scope.")
-            st.stop()
+            # A return, not st.stop(): Streamlit drops anything drawn after a
+            # stop, and run() still has the build caption to draw (B5).
+            return
         site_id = st.selectbox(
             "Site",
             [s["site_id"] for s in sites],
@@ -533,16 +563,27 @@ def run():
     if embedded.start().status != "running":
         with st.sidebar:
             auth_gate.render_account_section(decision.identity)
+        _build_caption()
         st.markdown(BACKEND_FAILED)
         return
+    # The banner comes first in the main area, before anything main() draws.
+    banner = st.empty()
+    _reset_banner(banner)
     try:
         main(decision.identity)
     except embedded.BackendNotRunning:
-        st.markdown(BACKEND_FAILED)  # lost between the start and a read; the next rerun replaces it
+        # Lost between the start and a read: the same page as a failed start,
+        # so no reset banner above it. The next rerun replaces the backend.
+        banner.empty()
+        st.markdown(BACKEND_FAILED)
     except HsmApiError as e:
         st.warning(f"HSM API refused the request ({e.status}): {e.message}")
     except urllib.error.URLError as e:
         st.error(f"Can't reach the demo backend ({escape_md(str(e.reason))}). Reload the page or try again later.")
+    finally:
+        # Last in the sidebar on every signed-in path, including a run main()
+        # stops early (no sites in scope) and one that fails (B5, commit review 2).
+        _build_caption()
 
 
 run()

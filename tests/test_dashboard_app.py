@@ -250,7 +250,11 @@ def test_hidden_shared_write_sent_through_the_client_is_refused_and_audited(clie
 
 def test_logged_out_view_shows_only_the_login(app):
     assert tab_labels(app) == []
-    assert [i.value for i in app.info] == ["Log in to see the dashboard."]
+    # The demo-data reset banner (U4) shows before a persona logs in too.
+    assert [i.value for i in app.info] == [
+        "Demo data: changes you make are reset periodically.",
+        "Log in to see the dashboard.",
+    ]
     assert button_keys(app) == {"session-login", markers.SIGN_OUT_BUTTON}
 
 
