@@ -1,0 +1,21 @@
+## Review
+
+**Verdict:** READY
+**Reviewer:** aidlc-product-lead-agent
+**Date:** 2026-10-05T12:21:57Z
+**Iteration:** 1
+
+### Findings
+
+| ID | Severity | Location | Finding | Required action | Status |
+|---|---|---|---|---|---|
+| R-01 | Major | aidlc/spaces/default/intents/261005-dashboard-hosting-readin/inception/user-stories/stories.md > US7.1, US9.1 (AC9.1.2) | The post-deploy check runs against Streamlit Community Cloud, where an idle free-tier app shows a "gone to sleep" page instead of the app. No criterion says what the check does against a sleeping app: wake it, retry, or report failure. A first run after idle could fail on a healthy deploy, or pass without seeing the gate. Only the "address does not answer" case (AC7.2.3) is covered. | Add a Given/When/Then for a sleeping or still-waking app: the check wakes it or retries within a stated timeout, and a wake-up page is never reported as a pass. | New |
+| R-02 | Major | aidlc/spaces/default/intents/261005-dashboard-hosting-readin/inception/user-stories/stories.md > Assumptions & Open Questions (NFR2); traceability.json > NFR2 "Deferred" | NFR2 (usable within 30 seconds of waking) has no story and no pass condition. Its stated measurement, the post-deploy check's timing, conflicts with the check never signing in (F1, NFR6). Inception rules say not to carry an unresolved contradiction forward. It is deferred openly, but the contradiction remains. | Before approving, either keep the deferral and record the contradiction as a named input to NFR Requirements, or add an AC that times the unauthenticated sign-in screen. | New |
+| R-03 | Minor | aidlc/spaces/default/intents/261005-dashboard-hosting-readin/inception/requirements-analysis/requirements.md > FR7.1, FR7.2, FR9.3 vs stories.md > US7.1 | Q6 dropped the build assertion from the check. The stories say so, but the upstream requirements still require the check to "show the expected build identifier" and take the expected build as input. traceability.json marks FR7.1 and FR7.2 as OK, so the narrowing is invisible to the sensor. | Record FR7.1 and FR7.2 as narrowed by Q6 in traceability.json, or amend the requirements so the two documents agree. | New |
+| R-04 | Minor | aidlc/spaces/default/intents/261005-dashboard-hosting-readin/inception/user-stories/stories.md > AC4.6.3, AC2.2.2, AC4.2.2 (secrets.toml.example), AC8.3.1 (dashboard/app.py watch entry), AC2.5.4 | Several criteria add behavior that no FR states: the persona session cleared at sign-out, `server.run()` refusing to start, the `.example` file, the app.py watch-list entry, and a startup failure when the signing and cookie secrets are equal. Most trace to team.md, but the inception rule asks that new requirements document their origin. | Cite the origin (team.md section or finding ID) beside each criterion, or add the matching FR text. | New |
+| R-05 | Minor | aidlc/spaces/default/intents/261005-dashboard-hosting-readin/inception/user-stories/stories.md > US3.1 | The audit trail is configured in-process (AC3.1.2) on a host whose disk may not be writable. Publish and PO routes return 503 "audit unavailable" when the trail fails. No story covers an unwritable audit path at startup or the visitor-facing result. | Add a criterion for audit startup failure: fail closed or degrade, with a log naming the cause and a plain message for the visitor. | New |
+| R-06 | Minor | aidlc/spaces/default/intents/261005-dashboard-hosting-readin/inception/user-stories/stories.md > US1.3 | US1.3 lists eight dependencies, so it only makes sense after the other stories land. That is against the "independently testable, not sequence-bound" rule. Its criteria are individually checkable, and the Dependencies section explains the ordering. | Accept as a documented delivery constraint, or state in US1.3 that its criteria are verifiable standalone and the dependencies govern merge order only. | New |
+
+### Summary
+
+The stories cover all of FR1 to FR10 with specific, testable Given/When/Then criteria. Fail-closed gate cases and the secret handling are especially strong. The two Major findings are an unhandled sleeping-app case for the post-deploy check and the NFR2 contradiction deferred without a pass condition. Neither blocks starting engineering, so the verdict is READY, and the human should weigh them at the gate.

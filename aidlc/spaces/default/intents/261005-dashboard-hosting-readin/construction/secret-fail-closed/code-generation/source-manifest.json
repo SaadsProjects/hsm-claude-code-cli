@@ -1,0 +1,22 @@
+{
+  "stage": "code-generation",
+  "unit": "secret-fail-closed",
+  "version": 1,
+  "writes": [
+    { "path": ".claude/hooks/require_no_violations.py" },
+    { "path": ".github/workflows/ci.yml" },
+    { "path": ".gitignore" },
+    { "path": "CLAUDE.md" },
+    { "path": "README.md" },
+    { "path": "dashboard/README.md" },
+    { "path": "mcp_server/hsm_tools.py" },
+    { "path": "mock_hsm/auth.py" },
+    { "path": "mock_hsm/server.py" },
+    { "path": "scripts/check_burned_secret.py" },
+    { "path": "scripts/dev-secret.sh" },
+    { "path": "scripts/start_mock_server.sh" },
+    { "path": "tests/conftest.py" },
+    { "path": "tests/test_secret_entry_points.py" },
+    { "path": "tests/test_signing_secret.py" }
+  ]
+}

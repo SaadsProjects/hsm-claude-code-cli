@@ -1,0 +1,11 @@
+{
+  "stage": "code-generation",
+  "unit": "staging-app",
+  "version": 1,
+  "writes": [
+    { "path": "docs/staging-app.md" },
+    { "path": "tests/test_staging_runbook.py" },
+    { "path": "README.md" },
+    { "path": "CLAUDE.md" }
+  ]
+}

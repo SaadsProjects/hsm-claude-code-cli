@@ -1,0 +1,22 @@
+{
+  "stage": "nfr-design",
+  "unit": "sign-in-gate",
+  "upstream_ids": ["NFR1.21", "NFR1.22", "NFR1.23", "NFR1.24", "NFR1.25", "NFR1.26", "NFR1.27", "NFR1.28", "NFR2.11", "NFR2.12", "NFR2.13", "NFR3.11", "NFR4.11", "NFR5.11", "NFR7.11"],
+  "coverage": [
+    { "id": "NFR1.21", "status": "OK", "target": "security-design S1: gate() first after the page header, st.stop() unless allow; render-tree and embedded.start spy tests per refusal path" },
+    { "id": "NFR1.22", "status": "OK", "target": "security-design S2: decide with is-True verified check and exact trimmed lower-cased match, no wildcard or domain rule" },
+    { "id": "NFR1.23", "status": "OK", "target": "security-design S2: pure decide/parse_allowlist (AST test); three seam functions are the only st.user/st.login/st.logout callers" },
+    { "id": "NFR1.24", "status": "OK", "target": "security-design S3: named checks for expected failures plus one broad boundary in gate() to Screen 5; guarded identity read on Screen 5" },
+    { "id": "NFR1.25", "status": "OK", "target": "security-design S4: bridge copies only when unset; compare_digest against cookie_secret gives settings_missing" },
+    { "id": "NFR1.26", "status": "OK", "target": "security-design S5: log lines built from constants only; fixed mockup copy; captured-log and screen tests" },
+    { "id": "NFR1.27", "status": "OK", "target": "security-design S5: email passed through dashboard.safe_text.escape_md; markup-email rendering test" },
+    { "id": "NFR1.28", "status": "OK", "target": "security-design S6: end_visitor_session outside the seam, key list from session.py, account binding on allow" },
+    { "id": "NFR2.11", "status": "OK", "target": "performance-design P1: constant-cost steps, no access cache, advisory perf-marked 50 ms p95 test" },
+    { "id": "NFR2.12", "status": "OK", "target": "performance-design P2: no file, socket or subprocess; socket-patch test on allowed and refused runs" },
+    { "id": "NFR2.13", "status": "OK", "target": "performance-design P3: no sleep, retry or polling; AST scan of auth_gate.py and secrets_bridge.py" },
+    { "id": "NFR3.11", "status": "OK", "target": "logical-components Test Seam and Floors: one shared AppTest helper (Q2 A), new modules under measured dashboard/" },
+    { "id": "NFR4.11", "status": "OK", "target": "security-design S7: once-per-session reason set, INFO/WARNING levels, not_signed_in unlogged, cleared at sign-out" },
+    { "id": "NFR5.11", "status": "OK", "target": "logical-components Screens and Accessibility: one h1 from the page header, fixed text, native st.button, marker keys" },
+    { "id": "NFR7.11", "status": "OK", "target": "security-design S8: streamlit[auth]==1.64.0, both locks recompiled with hashes, pip-audit with no new exception" }
+  ]
+}

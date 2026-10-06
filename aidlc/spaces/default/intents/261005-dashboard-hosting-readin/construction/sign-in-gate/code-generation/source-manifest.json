@@ -1,0 +1,26 @@
+{
+  "stage": "code-generation",
+  "unit": "sign-in-gate",
+  "version": 1,
+  "writes": [
+    { "path": "dashboard/auth_gate.py" },
+    { "path": "dashboard/secrets_bridge.py" },
+    { "path": "dashboard/markers.py" },
+    { "path": "dashboard/app.py" },
+    { "path": ".streamlit/secrets.toml.example" },
+    { "path": "requirements.in" },
+    { "path": "requirements.txt" },
+    { "path": "requirements-dev.txt" },
+    { "path": "tests/gate_app.py" },
+    { "path": "tests/test_gate_app.py" },
+    { "path": "tests/test_auth_gate.py" },
+    { "path": "tests/test_secrets_bridge.py" },
+    { "path": "tests/test_dashboard_gate.py" },
+    { "path": "tests/test_dashboard_app.py" },
+    { "path": "tests/test_dashboard_data.py" },
+    { "path": "tests/test_dashboard_embedded.py" },
+    { "path": "CLAUDE.md" },
+    { "path": "README.md" },
+    { "path": "dashboard/README.md" }
+  ]
+}

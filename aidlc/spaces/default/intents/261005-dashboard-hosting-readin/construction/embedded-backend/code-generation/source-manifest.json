@@ -1,0 +1,16 @@
+{
+  "stage": "code-generation",
+  "unit": "embedded-backend",
+  "version": 1,
+  "writes": [
+    { "path": "mock_hsm/embedded.py" },
+    { "path": "mock_hsm/audit.py" },
+    { "path": "dashboard/session.py" },
+    { "path": "dashboard/app.py" },
+    { "path": "CLAUDE.md" },
+    { "path": "README.md" },
+    { "path": "dashboard/README.md" },
+    { "path": "tests/test_embedded_backend.py" },
+    { "path": "tests/test_dashboard_embedded.py" }
+  ]
+}

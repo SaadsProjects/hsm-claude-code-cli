@@ -1,0 +1,15 @@
+{
+  "stage": "infrastructure-design",
+  "unit": "embedded-backend",
+  "upstream_ids": ["NFR1.11", "NFR1.13", "NFR2.1", "NFR2.2", "NFR2.4", "NFR3.8", "NFR4.2", "NFR4.3"],
+  "coverage": [
+    { "id": "NFR1.11", "status": "OK", "target": "infrastructure-specification Deployment: networking, backend on 127.0.0.1 only, no ingress" },
+    { "id": "NFR1.13", "status": "OK", "target": "infrastructure-specification Deployment: storage, private temp subdirectory mode 0700; HSM_AUDIT_PATH unset on hosted apps" },
+    { "id": "NFR2.1", "status": "OK", "target": "cicd-pipeline step 3: ordinary timing tests in the existing tests jobs; monitoring-design SLI start time" },
+    { "id": "NFR2.2", "status": "OK", "target": "cicd-pipeline step 3: liveness timing tests in the existing tests jobs" },
+    { "id": "NFR2.4", "status": "OK", "target": "infrastructure-specification Deployment: one app process per environment, one backend per process" },
+    { "id": "NFR3.8", "status": "OK", "target": "cicd-pipeline Stage to Gate mapping: tests (3.10), tests (3.14), coverage-gate" },
+    { "id": "NFR4.2", "status": "OK", "target": "monitoring-design Logs: mock_hsm.embedded WARNING lines in the Streamlit Cloud app log" },
+    { "id": "NFR4.3", "status": "OK", "target": "monitoring-design Metrics: backend replacement WARNING lines" }
+  ]
+}

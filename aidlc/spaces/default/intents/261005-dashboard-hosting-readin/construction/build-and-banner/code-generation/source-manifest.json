@@ -1,0 +1,14 @@
+{
+  "stage": "code-generation",
+  "unit": "build-and-banner",
+  "version": 1,
+  "writes": [
+    { "path": "agents/build_info.py" },
+    { "path": "dashboard/app.py" },
+    { "path": "tests/test_build_info.py" },
+    { "path": "tests/test_dashboard_build_banner.py" },
+    { "path": "tests/test_dashboard_app.py" },
+    { "path": "dashboard/README.md" },
+    { "path": "CLAUDE.md" }
+  ]
+}

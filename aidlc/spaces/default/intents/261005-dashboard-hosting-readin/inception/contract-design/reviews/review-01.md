@@ -1,0 +1,28 @@
+## Review
+
+**Verdict:** READY
+**Reviewer:** aidlc-architecture-reviewer-agent
+**Date:** 2026-10-05T15:27:42Z
+**Iteration:** 1
+
+### Findings
+
+| ID | Severity | Location | Finding | Required action | Status |
+|---|---|---|---|---|---|
+| R-01 | Major | aidlc/spaces/default/intents/261005-dashboard-hosting-readin/inception/contract-design/contract-summary.md > C3 EmbeddedBackend API, consumer_rules; C2 HSM_BASE_URL | The contract never says when the dashboard starts the embedded backend versus using an external one. Today `agents/hsm_client.py:22` binds `HSM_BASE_URL` at import and `HsmClient.__init__` uses it as a default argument. The documented local workflow is a separate `python3 -m mock_hsm.server` plus `HSM_BASE_URL`. C3 says `client_for` uses `current().address` "when no base_url is given", but `current()` is None unless something called `start()`. C2 says `HSM_BASE_URL` is "not used by the dashboard when embedded", with no definition of "embedded". A developer cannot tell whether an explicit `HSM_BASE_URL` wins, whether the dashboard always embeds, or what `client_for` does when `current()` is None. | State the selection rule (for example: start embedded only when `HSM_BASE_URL` is unset, or always, and which wins). State the `client_for` behaviour when `current()` is None. Note that `HsmClient` must be passed `base_url` explicitly, because its default is bound at import time. | New |
+| R-02 | Major | contract-summary.md > C6 Markers module, with C8 behaviour | C6 lists marker constants as "str values" and names the elements, but never defines how a marker is realised in the rendered Streamlit page (widget key, element id, or visible text) or what string form the check selects on. C8 asserts "SIGN_IN_SCREEN visible and APP_TABS absent" in a real browser. U3 (producer) and U5 (consumer) can implement incompatible mechanisms, and the AppTest and Playwright tests would need different handles. The contract is the only place this can be pinned. | Define the marker mechanism and its value format (for example a Streamlit container `key` rendering as a class, versus a `data-testid`, versus text). State how both AppTest and Playwright locate it, and how "absent" is determined while the page is still loading. | New |
+| R-03 | Minor | contract-summary.md > C1 mint_token raises | The contract says `mint_token` raises `KeyError` for an unknown user, but the current code (`mock_hsm/auth.py:39-40`) raises `ValueError`, and the contract calls the behaviour "unchanged". Callers and tests that catch the existing type would break if the change is real. | Say `ValueError`, or state that the type changes and name the consumers affected. | New |
+| R-04 | Minor | contract-summary.md > C3 `start()` and `current()` | Internal contradiction. `current()` says a dead instance "is reported as failed by the next start()". `start()` says that if no live instance exists it starts one. A dead instance is therefore either restarted or reported as failed. Whether a cached `failed` handle is retried on the next Streamlit rerun or reload is also unstated, although Screen 4 promises a way out. | State whether `start()` after a failure or a dead thread retries or returns the cached failed handle. Define the exact transition table. | New |
+| R-05 | Minor | contract-summary.md > C3 consumer_rules; dashboard/app.py lines 483 and 510 | The contract fixes the backend caption (R-01 of domain design) but not the other two import-time `HSM_BASE_URL` uses in `dashboard/app.py`. One is the connection-error message (line 510), which also tells the visitor to start the backend by hand. It would show a wrong address and wrong advice in embedded mode. | Extend the consumer rules to cover the error-path text, or state it is replaced by Screen 4. | New |
+| R-06 | Minor | contract-summary.md > C1 failure behaviour; C2 local_source | The failure list covers backend start, hook, MCP tool and SecretsBridge. It does not cover a `SecretMissingError` raised inside a running backend request handler, because `verify_token` now reads the secret per call. It also does not say how `.env.local` reaches the hook and MCP processes: they inherit the shell, so the user must export it before `claude` starts, and no mechanism is named. | Add the handler behaviour (for example a 500 or 503 with the message, never the value). Name how `.env.local` is loaded for hooks and the MCP server. | New |
+| R-07 | Minor | contract-summary.md > C8 exit codes | Exit 1 ("the page is not the app") and exit 3 ("did not finish waking") overlap for a host page that never leaves its sleeping state. The sleep-page recognition is listed as an open question blocking U5. | Add a one-line precedence rule for host-page outcomes, and keep the open question owned by U5 functional design. | New |
+
+### Validation Tool Results
+
+| Tool | Result | Interpretation |
+|---|---|---|
+| Manual check against code at 825a0f8 | `mock_hsm/auth.py` still has the hard-coded `_SECRET`, as expected before U1. `server.run()` calls `audit.configure()` at boot and `audit.configure(path=None)` honours `HSM_AUDIT_PATH`, so C2/C3 audit handling is feasible. `session.client_for` is the single `HsmClient` construction point, so C3 can be implemented there. | The contracts are implementable. R-01, R-02 and R-03 come from this check. |
+
+### Summary
+
+The contracts form a sound, acyclic provider-to-consumer set that matches the unit dependency graph and the existing code seams. Two gaps need a decision at the gate: the embedded-versus-external backend selection rule (R-01) and the marker realisation mechanism shared by U3 and U5 (R-02). The remaining items are minor clarifications.
