@@ -56,7 +56,7 @@ their own. If the two are the same, the gate refuses everyone with
 Fill in this block with your values in place of the placeholders. You paste it
 into the app's Secrets settings in step 3, so keep it somewhere outside the
 repository until then. The two top-level keys must come before the `[auth]`
-tables: TOML files any key under the last table above it, so a top-level key
+tables: TOML assigns any key to the last table above it, so a top-level key
 pasted lower down stops being top-level.
 
 ```toml
@@ -97,6 +97,15 @@ Open Advanced settings before you deploy and paste the secrets
 block from step 2 there, so the first start already has them; without them the
 app shows "Sign-in isn't available right now." and nothing else.
 
+If the deploy fails with "the `SaadsProjects` organization has enabled OAuth
+App access restrictions", Streamlit hasn't been approved for the organization
+yet. The person who connected Streamlit to GitHub opens
+github.com/settings/applications, Authorized OAuth Apps, Streamlit. Under
+Organization access they click Grant next to the organization if they are an
+organization owner; otherwise they click Request, and an owner approves it
+under the organization's Settings > Third-party Access. Then deploy again.
+Approve Streamlit only; keep the restriction on for every other app.
+
 ## 4. Prove it
 
 Do these in order. The check never signs in; steps (c) and (d) are your own
@@ -127,6 +136,7 @@ e. After the next pull request merges into `main`, confirm that staging
    redeploys by itself: once the app has restarted, sign in and check that the
    `Build` caption now shows the new head of `main`, then run (a) again. Until
    a later merge happens this step stays open, so record it as not yet proven.
+   The first merge after the app exists closes it.
 
 **Timing (NFR2).** The target is that the app is usable within 30 seconds of
 waking. A brand-new app is awake, so first put it to sleep: wait until
@@ -139,7 +149,8 @@ time python3 scripts/postdeploy_check.py https://<staging-app>.streamlit.app --t
 ```
 
 Also stopwatch your own sign-in in (c) from the moment the page wakes. Record
-both times, and record a miss rather than hiding it.
+both times, and record a miss rather than hiding it. This timed run from a
+sleeping app is what closes NFR2; until it is recorded, NFR2 stays open.
 
 ## Rollback
 

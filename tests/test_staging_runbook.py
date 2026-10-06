@@ -154,6 +154,24 @@ def test_runbook_says_when_to_set_hosted_python():
     assert matching, "the runbook doesn't tie the chosen Python version to HOSTED_PYTHON"
 
 
+def test_runbook_covers_the_organizations_oauth_app_restriction():
+    # The first staging deploy failed until the org owner granted Streamlit access.
+    matching = [
+        block
+        for block in paragraphs(runbook())
+        if "OAuth" in block and re.search(r"organi[sz]ation", block) and re.search(r"\bGrant\b", block)
+    ]
+    assert matching, "the runbook doesn't say how to approve Streamlit for a restricted organization"
+
+
+def test_runbook_says_what_closes_the_two_open_proof_items():
+    blocks = paragraphs(runbook())
+    timing = [b for b in blocks if "NFR2" in b and re.search(r"\bstays open\b", b) and "closes" in b]
+    assert timing, "the timing paragraph doesn't say what closes NFR2 or that it stays open until then"
+    redeploy = [b for b in blocks if "redeploys" in b and "first merge after the app exists" in b]
+    assert redeploy, "step (e) doesn't say which merge closes it"
+
+
 def test_runbook_checks_a_later_merge_redeploys_staging():
     matching = [
         block
