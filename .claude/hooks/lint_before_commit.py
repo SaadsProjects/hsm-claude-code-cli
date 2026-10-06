@@ -369,7 +369,7 @@ if __name__ == "__main__":
     raw = sys.stdin.read()
     try:
         main(raw)
-    except Exception as e:  # noqa: BLE001
+    except Exception as e:  # noqa: BLE001 -- boundary: turns any hook crash into a deny or a pass-through
         # A crashed hook fails open. Deny anything that might be a commit, but
         # don't let a hook bug block every other Bash command.
         if "commit" in raw:
