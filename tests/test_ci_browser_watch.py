@@ -15,7 +15,9 @@ import pytest
 
 ROOT = Path(__file__).resolve().parent.parent
 CI = ROOT / ".github" / "workflows" / "ci.yml"
-# The paths the team rule names, plus the dashboard the browser tests launch.
+# Paths that must stay watched: the post-deploy check, the gate and build files it
+# depends on, the dashboard the browser tests launch, the test files, the dev
+# lockfile and the workflow itself.
 REQUIRED = (
     "scripts/postdeploy_check.py",
     "dashboard/markers.py",
