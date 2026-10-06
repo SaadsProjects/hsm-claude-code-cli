@@ -261,6 +261,7 @@ except `matrix` is meant to be a required check:
 `.github/workflows/postdeploy.yml` is a manual (`workflow_dispatch`) run of
 `scripts/postdeploy_check.py` against a URL; it is not a required check and
 holds no secrets.
+`docs/staging-app.md` is the owner's runbook for creating and proving the staging app.
 
 The CI gate scripts live in `scripts/`. Their tests are `tests/test_ci_*.py`,
 loaded through `tests/ci_scripts.py`.

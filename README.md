@@ -88,6 +88,7 @@ dashboard), `2` bad usage, `3` no answer, still waking or never settled at the
 timeout, `4` the browser could not start (no verdict on the app). To
 run it from GitHub, start the `postdeploy` workflow from the Actions tab with
 the app URL (and optionally a timeout); it holds no secrets.
+To create the staging app and prove it, follow [docs/staging-app.md](docs/staging-app.md).
 
 ### Audit trail
 
