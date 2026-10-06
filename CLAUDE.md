@@ -56,7 +56,7 @@ it). The backend, the start script, the publish hook and the MCP server read
 `.env.local` themselves when the variable isn't exported, so the `claude`
 shell needs nothing extra; an exported value always wins. The dashboard reads
 it too (`dashboard/secrets_bridge.py`): an exported value, then
-`HSM_SIGNING_SECRET` in the Streamlit secrets (the hosted apps), then
+`HSM_SIGNING_SECRET` in the Streamlit secrets (the hosted app), then
 `.env.local`. The exception: a `HSM_SIGNING_SECRET` line in
 `.streamlit/secrets.toml` replaces an exported value, because Streamlit copies
 top-level secrets into the environment itself; the committed example leaves

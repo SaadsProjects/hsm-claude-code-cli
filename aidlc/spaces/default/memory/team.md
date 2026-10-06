@@ -47,17 +47,15 @@ the local hook only exists in clones that copied `settings.local.json`.
 Commit messages are a single imperative summary line ("Add …", "Restore …").
 GitHub appends the pull request number to the squash commit ("… (#3)").
 
-We keep a single trunk even with two environments. The production branch that
-Streamlit Community Cloud tracks is a deployment pointer, not a work branch.
-Nobody commits to it directly. It only ever moves to a commit that has already
-passed CI on `main` (see Deployment).
+We keep a single trunk, and the one hosted environment, staging, tracks `main`
+itself, so there is no deployment branch (see Deployment).
 
 ## Walking Skeleton
 
 We build a thin end-to-end slice first, before later work. What the slice
 covers depends on what already exists.
 
-- **When the hosted apps exist** (deploy and pipeline work), the slice runs: a
+- **When the hosted app exists** (deploy and pipeline work), the slice runs: a
   commit merged to `main` → lint and the test suite in CI → an automatic deploy
   to the staging app on Streamlit Community Cloud → a read-only post-deploy
   check against staging that passes. It must also prove that the CI security
@@ -67,7 +65,7 @@ covers depends on what already exists.
   owner, see `docs/staging-app.md`, since the post-deploy check never signs
   in).
 - **When no hosted app may exist yet** (the dashboard hosting work, where the
-  apps are created only after the app changes merge), the slice is local: the
+  app is created only after the app changes merge), the slice is local: the
   first pull request (the burned-secret removal) merges with all 10 required
   checks green, and the dashboard starts locally with its in-process backend
   and shows the sign-in screen.
@@ -159,9 +157,9 @@ human has seen the slice work end to end and approved the skeleton checkpoint.
   process as the dashboard (Streamlit Cloud runs a single process), bound to
   loopback only, with at most one backend per app process. The backend is
   never reachable from outside the app.
-- **Who can reach it**: the internet, but only behind a sign-in layer. Both
-  apps are public Streamlit Cloud apps that sign people in with Streamlit's
-  `st.login`. The in-app persona picker stays as a selector *inside* that layer,
+- **Who can reach it**: the internet, but only behind a sign-in layer. The
+  staging app is a public Streamlit Cloud app that signs people in with
+  Streamlit's `st.login`. The in-app persona picker stays as a selector *inside* that layer,
   not as the sign-in itself. The sign-in gate:
   - runs before anything else renders and before the backend is reached, and
     fails closed: missing or broken sign-in settings, an empty or malformed
@@ -172,19 +170,17 @@ human has seen the slice work end to end and approved the skeleton checkpoint.
   - compares the email, trimmed and lower-cased, for an exact match with the
     allowlist, with no domain wildcards;
   - keeps a way out (Sign out or reload) on every refusal screen.
-- **Allowlist**: it lives in each app's Streamlit secrets, and the repository
+- **Allowlist**: it lives in the app's Streamlit secrets, and the repository
   owner maintains it. Anyone on it can pick any persona, including the system
   administrator, so being on the allowlist means full demo access. We accept
   that risk for a demo.
 - **Order**: no hosted app exists, and nothing is exposed beyond loopback,
   until the sign-in gate and the signing-secret handling have merged to `main`.
-  The two apps are created, and their secrets entered, only after that.
-- **Environments**: two Streamlit Cloud apps that track two branches.
-  - Staging tracks `main` and redeploys automatically on every merge.
-  - Production tracks a separate production branch. Promotion is the gated
-    step: a manual approval by the repository owner, who is the single
-    approver, moves the production branch to a commit that already passed CI
-    and the staging post-deploy check on `main`.
+  A hosted app is created, and its secrets entered, only after that.
+- **Environments**: one Streamlit Cloud app, staging, which tracks `main` and
+  redeploys automatically on every merge. There is no production environment,
+  no production branch and no promotion step; production was removed on
+  2026-10-06. Adding one later is its own piece of work.
 - **Signing secret**: the token-signing secret comes from the environment
   (`HSM_SIGNING_SECRET`), which is Streamlit secrets when hosted. There is no
   fallback anywhere, not even for local development: every entry point (the
@@ -195,9 +191,9 @@ human has seen the slice work end to end and approved the skeleton checkpoint.
   messages name the variable, never the value. The secret never appears in
   committed configuration (`.mcp.json`, `.streamlit/config.toml`, settings
   examples); the MCP server inherits it from the shell.
-- **Per-environment secrets**: staging and production each have their own
-  signing secret, sign-in cookie secret and OAuth client. The signing secret
-  and the cookie secret are never the same value.
+- **Hosted secrets**: the staging app has its own signing secret, sign-in
+  cookie secret and OAuth client, never shared with local development. The
+  signing secret and the cookie secret are never the same value.
 - **Data and audit log**: the hosted demo keeps its data in memory and its
   audit trail on the app's own disk, so both reset when the app restarts or
   redeploys. The app shows a banner telling viewers that the demo data resets.
@@ -216,18 +212,20 @@ human has seen the slice work end to end and approved the skeleton checkpoint.
   repository secrets. Chromium for browser tests is installed by Playwright,
   cached under a key that includes the Playwright version, and only in jobs
   that hold no secrets and have only `contents: read`.
-- **Smoke checks**: after every deploy, the owner runs the read-only
-  post-deploy check (the manual `postdeploy` workflow) against the environment
-  in a real browser (Playwright). It confirms that the
+- **Smoke checks**: after every merge to `main` (a newer merge cancels a
+  pending run, since staging then serves the newer commit), the
+  `staging-check` workflow waits 3 minutes for staging to redeploy, then runs the read-only post-deploy
+  check against `vars.STAGING_URL` in a real browser (Playwright); the manual
+  `postdeploy` workflow re-runs it or checks another URL. A failed run emails
+  whoever merged. It confirms that the
   app answers and that a visitor who is not signed in is refused. It never
   signs in as an allowlisted user, so it cannot see the build caption, which
   shows only after sign-in; the owner confirms the build by signing in and
   reading the sidebar caption. A deploy is not done until that check passes.
   Smoke checks never write data and never call `publish_schedule` or
   `submit_purchase_order`.
-- **Rollback**: revert on `main` (staging) or move the production branch back
-  to the previous good commit, and let Streamlit Cloud redeploy it. Then
-  re-run the post-deploy check.
+- **Rollback**: revert the bad change on `main` through a pull request and let
+  Streamlit Cloud redeploy staging; `staging-check` then runs on the revert.
 
 ## Code Style
 
