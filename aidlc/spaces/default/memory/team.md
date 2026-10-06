@@ -63,7 +63,9 @@ covers depends on what already exists.
   check against staging that passes. It must also prove that the CI security
   checks (secret scan, dependency audit and bandit) run on the change as
   required checks, and that the sign-in layer in front of staging turns away a
-  visitor whose verified email is not on the allowlist.
+  visitor whose verified email is not on the allowlist (checked by hand by the
+  owner, see `docs/staging-app.md`, since the post-deploy check never signs
+  in).
 - **When no hosted app may exist yet** (the dashboard hosting work, where the
   apps are created only after the app changes merge), the slice is local: the
   first pull request (the burned-secret removal) merges with all 10 required
@@ -117,12 +119,13 @@ human has seen the slice work end to end and approved the skeleton checkpoint.
   post-deploy check. They do not count toward `.test-floor`.
 - **`browser-tests` cannot pass without testing**: it runs on every pull
   request and skips the browser run only when no watched file changed. The
-  watch list covers `scripts/postdeploy_check.py`, `dashboard/markers.py`,
-  `dashboard/auth_gate.py`, `agents/build_info.py`, `tests/*browser*`,
-  `requirements-dev.txt` and `.github/workflows/ci.yml`. A meta-test fails when
-  a browser test file, or a source file it imports, is off the watch list. Once
-  the first browser test exists, the job no longer accepts "no tests ran" as a
-  pass, and it gets the same single retry as the `tests` jobs.
+  watch list covers all Python under `agents/`, `dashboard/` and `mock_hsm/`,
+  `scripts/postdeploy_check.py`, `tests/*browser*`, `tests/conftest.py`,
+  `requirements-dev.txt` and `.github/workflows/ci.yml`. A meta-test
+  (`tests/test_ci_browser_watch.py`) fails when a browser test file, or any
+  project file a browser test reaches through imports or launched scripts
+  (followed transitively), is off the watch list. The job does not accept "no
+  tests ran" as a pass, and it gets the same single retry as the `tests` jobs.
 - A flaky test may be retried once in CI. A test that fails on the retry
   blocks the merge.
 - The suite runs serially. The fixed ports 8772 and 8773 in
@@ -213,12 +216,15 @@ human has seen the slice work end to end and approved the skeleton checkpoint.
   repository secrets. Chromium for browser tests is installed by Playwright,
   cached under a key that includes the Playwright version, and only in jobs
   that hold no secrets and have only `contents: read`.
-- **Smoke checks**: after every deploy, a read-only post-deploy check runs
-  against the environment in a real browser (Playwright). It confirms that the
-  app answers, that it runs the expected build, and that a visitor who is not
-  signed in or not allowlisted is refused. It never signs in as an allowlisted
-  user. A deploy is not done until that check passes. Smoke checks never write
-  data and never call `publish_schedule` or `submit_purchase_order`.
+- **Smoke checks**: after every deploy, the owner runs the read-only
+  post-deploy check (the manual `postdeploy` workflow) against the environment
+  in a real browser (Playwright). It confirms that the
+  app answers and that a visitor who is not signed in is refused. It never
+  signs in as an allowlisted user, so it cannot see the build caption, which
+  shows only after sign-in; the owner confirms the build by signing in and
+  reading the sidebar caption. A deploy is not done until that check passes.
+  Smoke checks never write data and never call `publish_schedule` or
+  `submit_purchase_order`.
 - **Rollback**: revert on `main` (staging) or move the production branch back
   to the previous good commit, and let Streamlit Cloud redeploy it. Then
   re-run the post-deploy check.
