@@ -257,3 +257,9 @@ not_exposed:
 
 - [assumption] The 120-second default timeout for the check (C8) is a starting value. NFR Requirements settles it together with the cold-start target (NFR2).
 - The open contract points are listed in the table above.
+
+## Amendments
+
+Added after approval. The sections above are kept as approved.
+
+- **2026-10-06, C8 exit 4.** The post-deploy check also exits `4` when the browser couldn't start or stopped working: Playwright is missing, Chromium fails to launch, or a Playwright error escapes the check's own retries (most page errors are retried and end as exit 3 instead). That result gives no verdict on the app. Codes 0–3 keep their meaning, so this is not a forbidden change under the ownership rules, and its consumers (`docs/staging-app.md`, `README.md`) were updated in the same pull request. It came from the U5 code-generation review fixes (`construction/postdeploy-check/code-generation/code-summary.md`, fix 4) and is documented in the `scripts/postdeploy_check.py` docstring.
