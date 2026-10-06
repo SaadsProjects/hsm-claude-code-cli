@@ -1,0 +1,14 @@
+{
+  "stage": "nfr-requirements",
+  "unit": "sign-in-gate",
+  "upstream_ids": ["NFR1", "NFR2", "NFR3", "NFR4", "NFR5", "NFR6", "NFR7"],
+  "coverage": [
+    { "id": "NFR1", "status": "OK", "target": "NFR1.21, NFR1.22, NFR1.23, NFR1.24, NFR1.25, NFR1.26, NFR1.27, NFR1.28" },
+    { "id": "NFR2", "status": "OK", "target": "NFR2.11, NFR2.12, NFR2.13" },
+    { "id": "NFR3", "status": "OK", "target": "NFR3.11" },
+    { "id": "NFR4", "status": "OK", "target": "NFR4.11" },
+    { "id": "NFR5", "status": "OK", "target": "NFR5.11" },
+    { "id": "NFR6", "status": "N/A", "target": "read-only checks belong to the post-deploy check (U5); U3 adds no smoke check" },
+    { "id": "NFR7", "status": "OK", "target": "NFR7.11" }
+  ]
+}

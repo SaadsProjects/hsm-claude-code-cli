@@ -1,0 +1,26 @@
+{
+  "stage": "code-generation",
+  "unit": "postdeploy-check",
+  "upstream_ids": [
+    "AC7.1.1", "AC7.1.2", "AC7.2.1", "AC7.2.2", "AC7.2.3", "AC7.3.1", "AC7.4.1", "AC7.4.2",
+    "AC8.1.1", "AC8.2.1", "AC8.2.2", "AC8.2.3", "AC8.3.1", "AC8.3.2", "AC8.3.3", "AC8.3.4"
+  ],
+  "coverage": [
+    { "id": "AC7.1.1", "status": "OK", "target": "tests/test_postdeploy_browser.py" },
+    { "id": "AC7.1.2", "status": "OK", "target": "tests/test_postdeploy_check.py" },
+    { "id": "AC7.2.1", "status": "OK", "target": "tests/test_postdeploy_browser.py" },
+    { "id": "AC7.2.2", "status": "OK", "target": "tests/test_postdeploy_browser.py" },
+    { "id": "AC7.2.3", "status": "OK", "target": "tests/test_postdeploy_browser.py" },
+    { "id": "AC7.3.1", "status": "OK", "target": "tests/test_postdeploy_check.py" },
+    { "id": "AC7.4.1", "status": "OK", "target": ".github/workflows/postdeploy.yml" },
+    { "id": "AC7.4.2", "status": "Deferred", "target": "U6 staging-app: a manual workflow run against staging is compared with the by-hand check" },
+    { "id": "AC8.1.1", "status": "OK", "target": "requirements-dev.txt" },
+    { "id": "AC8.2.1", "status": "OK", "target": ".github/workflows/ci.yml" },
+    { "id": "AC8.2.2", "status": "OK", "target": "tests/browser_app.py" },
+    { "id": "AC8.2.3", "status": "OK", "target": "tests/test_postdeploy_browser.py" },
+    { "id": "AC8.3.1", "status": "OK", "target": "tests/test_ci_browser_watch.py" },
+    { "id": "AC8.3.2", "status": "OK", "target": "tests/test_ci_browser_watch.py" },
+    { "id": "AC8.3.3", "status": "OK", "target": ".github/workflows/ci.yml" },
+    { "id": "AC8.3.4", "status": "N/A", "target": "no required job was renamed, added or removed; the ruleset's required-check list stays as it is (M2)" }
+  ]
+}

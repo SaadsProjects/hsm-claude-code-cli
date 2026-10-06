@@ -5,5 +5,19 @@
     "dirName": "261004-dashboard-writes",
     "scope": "dashboard-writes-restore",
     "status": "complete"
+  },
+  {
+    "uuid": "01a10812-bfc2-7f9d-8ab9-d49905182e2e",
+    "slug": "dashboard-deploy-pipelin",
+    "dirName": "261004-dashboard-deploy-pipelin",
+    "scope": "infra",
+    "status": "in-flight"
+  },
+  {
+    "uuid": "01a10a08-0a84-7035-a7ac-c3426aff24c8",
+    "slug": "dashboard-hosting-readin",
+    "dirName": "261005-dashboard-hosting-readin",
+    "scope": "feature",
+    "status": "complete"
   }
 ]

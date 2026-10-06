@@ -1,0 +1,21 @@
+{
+  "stage": "nfr-design",
+  "unit": "u1-secret-fail-closed",
+  "upstream_ids": ["NFR1.1", "NFR1.2", "NFR1.3", "NFR1.4", "NFR1.5", "NFR1.6", "NFR1.7", "NFR1.8", "NFR1.9", "NFR1.10", "NFR3.1", "NFR3.2", "NFR4.1", "NFR7.1"],
+  "coverage": [
+    {"id": "NFR1.1", "status": "OK", "target": "security-design D5: literal and exclusion removed last, in one commit"},
+    {"id": "NFR1.2", "status": "OK", "target": "security-design D1: require_secret length check (32 UTF-8 bytes)"},
+    {"id": "NFR1.3", "status": "OK", "target": "security-design D1: single gate with no fallback; mint and verify call it"},
+    {"id": "NFR1.4", "status": "OK", "target": "security-design D2: hook calls require_secret before validation and denies explicitly"},
+    {"id": "NFR1.5", "status": "OK", "target": "security-design D2: server __main__ refusal and _dispatch 503 mapping; start script delegates to Python"},
+    {"id": "NFR1.6", "status": "OK", "target": "security-design D4: fixed-text messages; tests assert the value is absent"},
+    {"id": "NFR1.7", "status": "OK", "target": "security-design D1: exact SHA-256 comparison against the stored burned-value hash"},
+    {"id": "NFR1.8", "status": "OK", "target": "security-design D4: .mcp.json test; secret only in the environment or .env.local"},
+    {"id": "NFR1.9", "status": "OK", "target": "security-design D3: umask 077 and chmod 600 after every write; explicit .gitignore lines"},
+    {"id": "NFR1.10", "status": "OK", "target": "security-design D3: load_local_secret root from __file__, no override, KEY=VALUE only"},
+    {"id": "NFR3.1", "status": "OK", "target": "security-design D5 ordering and D2/D4 tests; floors held in CI"},
+    {"id": "NFR3.2", "status": "OK", "target": "security-design D2: conftest generates a per-run secret"},
+    {"id": "NFR4.1", "status": "OK", "target": "security-design D2 and Q1: messages name the variable and reason; 503 warning line with path"},
+    {"id": "NFR7.1", "status": "OK", "target": "tech-stack-decisions: standard library only; no new dependency"}
+  ]
+}

@@ -1,0 +1,21 @@
+## Review
+
+**Verdict:** NOT-READY
+**Reviewer:** aidlc-product-lead-agent
+**Date:** 2026-10-05T11:59:59Z
+**Iteration:** 1
+
+### Findings
+
+| ID | Severity | Location | Finding | Required action | Status |
+|---|---|---|---|---|---|
+| R-01 | Major | aidlc/spaces/default/intents/261005-dashboard-hosting-readin/inception/requirements-analysis/requirements.md > Constraints (PR plan, walking skeleton) vs FR4 and FR2 | The Constraints say the first PR holds only FR1.1, FR1.2, FR1.3 and FR1.4 and the rest ships at the end. The walking skeleton says that first PR ends with the dashboard starting locally and showing the sign-in screen. That screen is FR4, which is in the last PR. Removing the fallback secret in PR 1 also breaks local use of the start script, hook and MCP server (FR2.3 to FR2.5) and needs the dev-secret script (FR2.2). The hook is the dangerous one: a crash fails open, so FR2.4 must land with FR1. | Say which FRs belong to PR 1. At minimum FR2.2, FR2.4 and FR2.5 must join FR1, so removing the fallback leaves no ungated entry point. Either restate the skeleton as reachable from PR 1 (for example, the dashboard refuses to start without a secret) or move the minimum gate into PR 1. | New |
+| R-02 | Major | requirements.md > NFR2 (Cold start) with FR7.1 | NFR2 requires a signed-in, allowed visitor to be usable within 30 seconds, "measured by the post-deploy check's timing against staging". FR7.1 and the F1 rule forbid that check from ever signing in. The check can time only the unauthenticated sign-in screen, which is not what NFR2 states. As written, QA cannot test it. | Redefine the NFR2 pass criterion to what the check can measure (for example, the sign-in screen renders within N seconds of a cold wake), or record a manual measurement by the owner as the evidence. Name the timer start and end points and the wake condition. | New |
+| R-03 | Major | requirements.md > FR3.4, FR5, FR2.1, FR2.6, FR4.10, FR9.1, FR10.1 | Many requirements have no pass/fail criterion, which the inception guardrail asks for. Examples: backend-start failure screen (FR3.4), build-id fallback to a source fingerprint (FR5.1), the Streamlit-secrets bridge (FR2.1), `.gitignore` lines (FR2.6), refusal logging with no email in the log (FR4.10), the docs updates (FR10.1), and what "created" means for staging (FR9.1). Only FR1, FR3.2 and FR6 carry explicit Pass lines. | Add one observable pass condition each. Examples: a test forcing a start failure shows the exact screen text with Sign out present; the fingerprint is stable across two runs on identical source; `git check-ignore` matches the listed paths; a captured log contains the reason and not the email; named docs sections exist; staging exists, tracks `main`, and the FR9.3 check passes. | New |
+| R-04 | Minor | requirements.md > FR9.1 to FR9.3 and Out of Scope | Creating the staging app is a manual console action by the owner, not code. Its owner and evidence are not stated. The post-deploy check (FR7) takes the app URL and expected build as inputs, but the way to learn the expected build for a running staging app is not given. | State who creates the app and what evidence closes FR9 (for example, URL, commit SHA shown, a passing check output attached). | New |
+| R-05 | Minor | requirements.md > Assumptions and Constraints (CI matrix), with Q7 | Q7 decided against adding the hosted Python to CI, yet the hosted runtime is what staging runs. The gap (a hosted Python that differs from 3.10 and 3.14) is not logged as a risk. | Record it as an accepted risk and say which Python the staging app is pinned to. | New |
+| R-06 | Minor | requirements.md > NFR3 | "Raises both floors with headroom" gives no measurable amount. | Give a rule, for example set the new floors at or below the measured value and no lower than the old floor, or leave the number to Build and Test and say so. | New |
+
+### Summary
+
+The requirements are well traced to ideation and team rules, and the Q1 to Q8 decisions (including the staging-only narrowing) are reflected. Three Major findings block approval: the first PR's contents contradict the walking skeleton and leave ungated entry points (R-01), NFR2 asks the post-deploy check to measure something it is forbidden to do (R-02), and many FRs lack pass/fail criteria (R-03).

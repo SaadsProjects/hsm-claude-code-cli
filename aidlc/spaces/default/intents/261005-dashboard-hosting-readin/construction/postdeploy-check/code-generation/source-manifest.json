@@ -1,0 +1,20 @@
+{
+  "stage": "code-generation",
+  "unit": "postdeploy-check",
+  "version": 1,
+  "writes": [
+    { "path": "scripts/postdeploy_check.py" },
+    { "path": ".github/workflows/postdeploy.yml" },
+    { "path": ".github/workflows/ci.yml" },
+    { "path": "requirements-dev.in" },
+    { "path": "requirements-dev.txt" },
+    { "path": "tests/browser_app.py" },
+    { "path": "tests/test_postdeploy_check.py" },
+    { "path": "tests/test_postdeploy_browser.py" },
+    { "path": "tests/test_ci_browser_watch.py" },
+    { "path": "tests/test_postdeploy_workflow.py" },
+    { "path": "README.md" },
+    { "path": "dashboard/README.md" },
+    { "path": "CLAUDE.md" }
+  ]
+}

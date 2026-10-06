@@ -1,0 +1,16 @@
+{
+  "stage": "code-generation",
+  "unit": "build-and-banner",
+  "upstream_ids": ["AC5.1.1", "AC5.1.2", "AC5.1.3", "AC5.2.1", "AC5.2.2", "AC5.2.3", "AC5.2.4", "AC6.1.1", "AC6.1.2"],
+  "coverage": [
+    { "id": "AC5.1.1", "status": "OK", "target": "agents/build_info.py" },
+    { "id": "AC5.1.2", "status": "OK", "target": "dashboard/app.py" },
+    { "id": "AC5.1.3", "status": "OK", "target": "tests/test_build_info.py" },
+    { "id": "AC5.2.1", "status": "OK", "target": "tests/test_build_info.py" },
+    { "id": "AC5.2.2", "status": "OK", "target": "tests/test_build_info.py" },
+    { "id": "AC5.2.3", "status": "OK", "target": "agents/build_info.py" },
+    { "id": "AC5.2.4", "status": "OK", "target": "tests/test_build_info.py" },
+    { "id": "AC6.1.1", "status": "OK", "target": "tests/test_dashboard_build_banner.py" },
+    { "id": "AC6.1.2", "status": "OK", "target": "dashboard/app.py" }
+  ]
+}

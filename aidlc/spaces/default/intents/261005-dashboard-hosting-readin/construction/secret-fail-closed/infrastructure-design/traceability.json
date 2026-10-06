@@ -1,0 +1,12 @@
+{
+  "stage": "infrastructure-design",
+  "unit": "u1-secret-fail-closed",
+  "upstream_ids": ["NFR1.1", "NFR1.8", "NFR3.1", "NFR3.2", "NFR7.1"],
+  "coverage": [
+    {"id": "NFR1.1", "status": "OK", "target": "CI secrets job: gitleaks plus check_burned_secret.py with an empty TEMPORARY_EXCLUSIONS"},
+    {"id": "NFR1.8", "status": "OK", "target": "CI secrets job (gitleaks) over committed configuration"},
+    {"id": "NFR3.1", "status": "OK", "target": "CI tests (3.10), tests (3.14) and coverage-gate jobs with the floor files"},
+    {"id": "NFR3.2", "status": "OK", "target": "CI tests job step that fails when HSM_SIGNING_SECRET is set before pytest"},
+    {"id": "NFR7.1", "status": "OK", "target": "CI audit and lock-check jobs, unchanged and green"}
+  ]
+}

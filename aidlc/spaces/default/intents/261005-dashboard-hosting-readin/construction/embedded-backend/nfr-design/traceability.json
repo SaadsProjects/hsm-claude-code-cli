@@ -1,0 +1,27 @@
+{
+  "stage": "nfr-design",
+  "unit": "embedded-backend",
+  "upstream_ids": ["NFR1.11", "NFR1.12", "NFR1.13", "NFR1.14", "NFR2.1", "NFR2.2", "NFR2.3", "NFR2.4", "NFR2.5", "NFR3.3", "NFR3.4", "NFR3.5", "NFR3.6", "NFR3.7", "NFR3.8", "NFR4.2", "NFR4.3", "NFR4.4", "NFR5.1", "NFR7.2"],
+  "coverage": [
+    { "id": "NFR1.11", "status": "OK", "target": "security-design S1: host fixed to 127.0.0.1, not a start parameter" },
+    { "id": "NFR1.12", "status": "OK", "target": "security-design S2: secret check before any directory or socket" },
+    { "id": "NFR1.13", "status": "OK", "target": "security-design S3: create-only mkdir 0700, lstat owner/mode/symlink validation, audit.py unchanged" },
+    { "id": "NFR1.14", "status": "OK", "target": "security-design S4: causes built from non-secret sources; Screen 4 fixed text" },
+    { "id": "NFR2.1", "status": "OK", "target": "performance-design P1: minimal start path, ordinary timing test under 2 s" },
+    { "id": "NFR2.2", "status": "OK", "target": "performance-design P2: LIVENESS_TIMEOUT_S = 0.5 constant, refused/timeout tests, under 1.5 s bound" },
+    { "id": "NFR2.3", "status": "OK", "target": "performance-design P3: reuse pays lock plus one connect only" },
+    { "id": "NFR2.4", "status": "OK", "target": "scalability-design SC1: module-level holder behind one lock" },
+    { "id": "NFR2.5", "status": "OK", "target": "scalability-design SC2: existing ThreadingHTTPServer, 10-concurrent test" },
+    { "id": "NFR3.3", "status": "OK", "target": "reliability-design R1: one attempt, failed handle, no retry" },
+    { "id": "NFR3.4", "status": "OK", "target": "reliability-design R2: retire with bounded shutdown and server_close" },
+    { "id": "NFR3.5", "status": "OK", "target": "reliability-design R3: audit.unavailable_reason() read back after configure" },
+    { "id": "NFR3.6", "status": "OK", "target": "reliability-design R4: client_for raises BackendNotRunning, never starts" },
+    { "id": "NFR3.7", "status": "OK", "target": "reliability-design R5: server.py unchanged, handler reused" },
+    { "id": "NFR3.8", "status": "OK", "target": "reliability-design R6: test-first, new module counted in coverage" },
+    { "id": "NFR4.2", "status": "OK", "target": "observability-design O1: WARNING on mock_hsm.embedded logger for failures" },
+    { "id": "NFR4.3", "status": "OK", "target": "observability-design O1: WARNING on replacement (wording corrected: data is kept)" },
+    { "id": "NFR4.4", "status": "OK", "target": "observability-design O2: caption from embedded.current() at render time" },
+    { "id": "NFR5.1", "status": "OK", "target": "observability-design O3: h1 title then fixed Screen 4 text, no tabs" },
+    { "id": "NFR7.2", "status": "OK", "target": "security-design S5: standard-library imports only, AST test" }
+  ]
+}

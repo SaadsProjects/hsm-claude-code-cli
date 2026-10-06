@@ -1,0 +1,22 @@
+{
+  "stage": "infrastructure-design",
+  "unit": "sign-in-gate",
+  "upstream_ids": ["NFR1.21", "NFR1.22", "NFR1.23", "NFR1.24", "NFR1.25", "NFR1.26", "NFR1.27", "NFR1.28", "NFR2.11", "NFR2.12", "NFR2.13", "NFR3.11", "NFR4.11", "NFR5.11", "NFR7.11"],
+  "coverage": [
+    { "id": "NFR1.21", "status": "N/A", "target": "application render order inside the dashboard process (security-design S1); no infrastructure resource" },
+    { "id": "NFR1.22", "status": "N/A", "target": "pure decision function (security-design S2); infrastructure only supplies Google OIDC per infrastructure-specification Infrastructure Services" },
+    { "id": "NFR1.23", "status": "N/A", "target": "code structure and seam (security-design S2); no infrastructure resource" },
+    { "id": "NFR1.24", "status": "OK", "target": "infrastructure-specification Local Run: missing secrets.toml gives Screen 5; unreadable .env.local becomes gate_error through the gate boundary" },
+    { "id": "NFR1.25", "status": "OK", "target": "infrastructure-specification Signing-Secret Sources: export, then Streamlit secrets, then .env.local; per-environment secrets and OAuth clients; example file sets no signing secret" },
+    { "id": "NFR1.26", "status": "OK", "target": "monitoring-design Logs & Tracing: constants-only refusal lines on dashboard.auth_gate; cicd-pipeline Secrets in CI/CD: no secret in CI" },
+    { "id": "NFR1.27", "status": "N/A", "target": "rendering rule in application code (security-design S5); no infrastructure resource" },
+    { "id": "NFR1.28", "status": "N/A", "target": "sign-out state clearing in application code (security-design S6); no infrastructure resource" },
+    { "id": "NFR2.11", "status": "OK", "target": "monitoring-design Metrics: perf-marked p95 50 ms test run by hand; cicd-pipeline: perf tests never run in CI" },
+    { "id": "NFR2.12", "status": "OK", "target": "infrastructure-specification Networking and Signing-Secret Sources: only Streamlit's OIDC egress; .env.local read at most once per process as a secret read" },
+    { "id": "NFR2.13", "status": "N/A", "target": "no-wait rule in application code (performance-design P3); no infrastructure resource" },
+    { "id": "NFR3.11", "status": "OK", "target": "cicd-pipeline gates table: tests (3.10), tests (3.14) and coverage-gate with the shared AppTest helper" },
+    { "id": "NFR4.11", "status": "OK", "target": "monitoring-design Metrics & KPIs and Logs & Tracing: app log on Streamlit Cloud, INFO/WARNING per reason, at most five lines per session" },
+    { "id": "NFR5.11", "status": "N/A", "target": "screen structure in application code (logical-components Screens and Accessibility); keyboard check runs in U5 browser tests" },
+    { "id": "NFR7.11", "status": "OK", "target": "cicd-pipeline Build and change procedure plus lock-check, audit and both tests legs; infrastructure-specification Infrastructure Services streamlit[auth]==1.64.0" }
+  ]
+}

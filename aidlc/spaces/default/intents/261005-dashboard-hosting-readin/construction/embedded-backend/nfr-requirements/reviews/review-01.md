@@ -1,0 +1,28 @@
+## Review
+
+**Verdict:** NOT-READY
+**Reviewer:** aidlc-architecture-reviewer-agent
+**Date:** 2026-10-05T21:59:03Z
+**Iteration:** 1
+
+### Findings
+
+| ID | Severity | Location | Finding | Required action | Status |
+|---|---|---|---|---|---|
+| R-01 | Major | aidlc/spaces/default/intents/261005-dashboard-hosting-readin/construction/embedded-backend/nfr-requirements/performance-requirements.md > NFR2.2 pass condition | The pass condition uses a listener "that never accepts" and expects the connect to time out. On loopback the kernel completes the TCP handshake from the listen backlog without accept(), so the connect succeeds at once and the test cannot show a timeout. The condition also says "within about 0.5 seconds", which is not a pass/fail bound. | Rewrite the pass condition around a construction that really blocks a connect (a listener whose backlog is full), or assert that the timeout argument passed to the connect is 0.5 and that a refused or timed-out connect yields "not live". Give a numeric upper bound, for example under 1.5 seconds. | New |
+| R-02 | Major | aidlc/spaces/default/intents/261005-dashboard-hosting-readin/construction/embedded-backend/nfr-requirements/performance-requirements.md > closing note and NFR2.1/NFR2.2 | The note says timing tests are "ordinary" only where the bound is far from typical behaviour, otherwise `perf`-marked, and does not say which of NFR2.1/2.2/2.3 are which. A `perf` test never runs in CI (team.md Testing Posture), so the 2-second start and 0.5-second liveness targets could silently end up with no CI evidence. The bounds depend on this split, but the artifact leaves it to the implementer. | State per requirement whether it runs in CI. A loopback start under 2 seconds is far from typical (milliseconds), so mark NFR2.1 ordinary; keep a margin-based bound for NFR2.2. Also state that no timing test carries both the `perf` and `browser` marks. | New |
+| R-03 | Major | aidlc/spaces/default/intents/261005-dashboard-hosting-readin/construction/embedded-backend/nfr-requirements/security-requirements.md > NFR1.13 | The requirement covers only creating the directory with mode 0700. BR3.2 puts it at a predictable path (`<tmp>/hsm-demo-<user id>`) in a shared directory, and the threat model names tampering by another local user. If the directory already exists, owned by someone else, with a looser mode, or as a symlink, the requirement says nothing. Today `audit.py` `_narrow_mode` would chmod whatever it finds there. Writing the trail into a pre-created attacker directory is the exact threat listed. | Add a pass condition for a pre-existing directory: the start fails (status failed, cause naming the audit path problem) unless the directory is a real directory owned by the current user with no group or other access. Test with a foreign-owned or symlinked directory where the platform allows it. | New |
+| R-04 | Minor | aidlc/spaces/default/intents/261005-dashboard-hosting-readin/construction/embedded-backend/nfr-requirements/security-requirements.md > NFR1.14 | The pass condition captures the log and the screen and asserts the value, the address and an exception name are absent, but the audit reason shown in NFR3.5 (and `audit.py`'s own log lines) includes the file path, and NFR4.2 requires the technical cause in the log. It is unclear whether the "no address, no exception name" assertion applies to the log or only to the screen. | Split the clause: the log must never contain the secret value; the screen must contain none of the value, path, address or exception name. | New |
+| R-05 | Minor | aidlc/spaces/default/intents/261005-dashboard-hosting-readin/construction/embedded-backend/nfr-requirements/observability-requirements.md > NFR5.1 | The "keyboard-reachable way out once U3 adds it" part is conditional on another unit and cannot be tested in U2. The requirement as written is only partly verifiable here. | Split NFR5.1 into the U2-testable part (text message under the h1, no tabs) and a pointer that the Sign out half is verified by U3. | New |
+| R-06 | Minor | aidlc/spaces/default/intents/261005-dashboard-hosting-readin/construction/embedded-backend/nfr-requirements/security-requirements.md > NFR1.11 | The pass condition tests the bound host only. Loopback keeps other hosts out but not other processes on the same host. The project rule is "not reachable from outside the dashboard's own host, container or process", so the residual same-host exposure (mitigated by token auth) is unstated. | Add one sentence recording the same-host residual risk and that token verification is the control, or cite team.md's acceptance of loopback. | New |
+
+### Validation Tool Results
+
+| Tool | Result | Interpretation |
+|---|---|---|
+| Traceability read | NFR1 to NFR7 all listed in `traceability.json`; NFR6 marked N/A with a reason | Coverage is complete. Requirement IDs continue U1's numbering as intended. |
+| Code check (`mock_hsm/server.py`, `mock_hsm/audit.py`) | Server is `ThreadingHTTPServer`; `audit.py` narrows its parent directory's mode and records an `unavailable` reason string | Consistent with the tech-stack claims. Confirms R-03 (the parent directory is chmod-ed) and that the unavailable reason carries a path (R-04). |
+
+### Summary
+
+The targets match the human's answers (2 s start, 0.5 s liveness, 10 concurrent) and the approved functional design, and traceability covers NFR1 to NFR7. Three Major gaps remain (an untestable timeout case, an unstated CI split for timing tests, and no handling of a pre-existing audit directory), which exceeds the limit of two, so the verdict is NOT-READY.

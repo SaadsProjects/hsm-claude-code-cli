@@ -1,0 +1,27 @@
+{
+  "stage": "functional-design",
+  "unit": "embedded-backend",
+  "upstream_ids": ["AC3.1.1", "AC3.1.2", "AC3.2.1", "AC3.2.2", "AC3.2.3", "AC3.3.1", "AC3.3.2", "AC3.3.3", "AC3.4.1"],
+  "coverage": [
+    { "id": "AC3.1.1", "status": "OK", "target": "BR1.1, BR4.1" },
+    { "id": "AC3.1.2", "status": "OK", "target": "BR3.2, BR4.1" },
+    { "id": "AC3.2.1", "status": "OK", "target": "BR2.1" },
+    { "id": "AC3.2.2", "status": "OK", "target": "BR2.1, BR2.2" },
+    { "id": "AC3.2.3", "status": "OK", "target": "BR2.1" },
+    { "id": "AC3.3.1", "status": "OK", "target": "BR5.1" },
+    { "id": "AC3.3.2", "status": "OK", "target": "BR5.1" },
+    { "id": "AC3.3.3", "status": "OK", "target": "BR5.2" },
+    { "id": "AC3.4.1", "status": "OK", "target": "BR6.1" }
+  ],
+  "reverse": [
+    { "id": "BR1.2", "status": "N/A", "target": "team code-style rule (standard-library-only start function in mock_hsm/); FR3.1" },
+    { "id": "BR2.3", "status": "N/A", "target": "contract C3 no-retry-loop rule; functional-design Q2" },
+    { "id": "BR3.1", "status": "N/A", "target": "fail-closed secret rule from U1 contract C1 applied to the in-process start; NFR1" },
+    { "id": "BR4.2", "status": "N/A", "target": "defensive rule for calls that bypass DashboardShell; functional-design Q3" },
+    { "id": "BR5.3", "status": "N/A", "target": "domain-design review R-01 caption correction; contract C3 consumer rule" },
+    { "id": "BR2.4", "status": "N/A", "target": "resource and data-reset handling for a dead instance; functional-design review R-03" },
+    { "id": "BR2.5", "status": "N/A", "target": "no address caching and cache clear on replacement; functional-design review R-03" },
+    { "id": "BR3.3", "status": "N/A", "target": "detection of an unusable audit trail (configure never raises); functional-design review R-02" },
+    { "id": "BR5.4", "status": "N/A", "target": "render order from components.md DashboardShell and interaction-spec step 3" }
+  ]
+}

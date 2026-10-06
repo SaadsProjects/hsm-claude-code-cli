@@ -1,0 +1,12 @@
+{
+  "stage": "code-generation",
+  "unit": "staging-app",
+  "upstream_ids": ["FR9.1", "FR9.2", "FR9.3", "NFR2", "FR10.1"],
+  "coverage": [
+    { "id": "FR9.1", "status": "OK", "target": "docs/staging-app.md" },
+    { "id": "FR9.2", "status": "OK", "target": "tests/test_staging_runbook.py" },
+    { "id": "FR9.3", "status": "OK", "target": "scripts/postdeploy_check.py" },
+    { "id": "NFR2", "status": "Deferred", "target": "docs/staging-app.md" },
+    { "id": "FR10.1", "status": "OK", "target": "docs/staging-app.md" }
+  ]
+}
