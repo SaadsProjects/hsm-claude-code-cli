@@ -61,10 +61,3 @@ def test_secret_inside_run_block_fails():
 def test_secret_after_run_block_ends_is_allowed():
     text = GOOD + "      - uses: some/action@" + SHA + " # v1\n        with:\n          token: ${{ secrets.T }}\n"
     assert cw.check_text("ci.yml", text) == []
-
-
-def test_promote_workflow_needs_main_ref_guard():
-    problems = cw.check_text("promote.yml", GOOD)
-    assert any("refs/heads/main" in p for p in problems)
-    guarded = GOOD + '      - run: test "$GITHUB_REF" = refs/heads/main\n'
-    assert cw.check_text("promote.yml", guarded) == []

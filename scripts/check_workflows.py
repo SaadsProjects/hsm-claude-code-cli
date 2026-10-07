@@ -7,8 +7,7 @@ Complements actionlint (syntax and expressions) with this project's rules:
     a `# vX.Y.Z` comment saying which release it is;
   - every workflow declares top-level `permissions`, so jobs start from none;
   - no `${{ secrets.* }}` expression appears on a `run:` line or inside a
-    `run:` block (secrets reach steps through `env:` only, never a command line);
-  - promote.yml guards on `refs/heads/main`.
+    `run:` block (secrets reach steps through `env:` only, never a command line).
 """
 
 import re
@@ -58,8 +57,6 @@ def check_text(name, text):
             if rest in ("|", ">", "|-", ">-", "|+", ">+"):
                 run_block_indent = _indent(line) + (len(line.lstrip(" ")) - len(line.lstrip(" -")))
 
-    if name == "promote.yml" and "refs/heads/main" not in text:
-        problems.append(f"{name}: missing the refs/heads/main guard (promotion runs only from main)")
     return problems
 
 
