@@ -374,8 +374,11 @@ def decide(state, observation: Observation, open_issue: OutageIssue | None, *, p
 def _when_down(state, observation, issue_open, adopted, practice):
     """BR2.4 and BR2.6-BR2.9 for a down observation: (new_state, action, extra)."""
     if state is not None and state.issue_number is not None and not issue_open and not state.acknowledged:
-        if state.practice:  # BR2.4: closing a practice issue ends the drill
-            return None, "nothing", {}
+        if state.practice:
+            # BR2.4: closing a practice issue ends the drill, and this run is
+            # the first sighting of the next one, so a repeat drill with the
+            # same address takes two runs like the first.
+            return replace(_healthy(observation, True), first_down_at=observation.checked_at), "remember", {}
         return _checked(replace(state, acknowledged=True), observation), "acknowledge", {}
     if issue_open:  # BR2.6 (or BR2.3 when the issue was just adopted)
         action = "adopt-issue" if adopted else "leave-open"

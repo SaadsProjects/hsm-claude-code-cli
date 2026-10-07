@@ -14,6 +14,7 @@ import threading
 import time
 import urllib.request
 from contextlib import contextmanager
+from dataclasses import replace
 from datetime import datetime, timedelta, timezone
 from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 from pathlib import Path
@@ -417,17 +418,38 @@ def test_a_real_issue_closed_by_hand_during_the_outage_is_an_acknowledgement():
     assert state.issue_number == 42
 
 
-def test_a_practice_issue_closed_by_hand_ends_the_drill():
+def test_a_practice_issue_closed_by_hand_ends_the_drill_and_this_run_starts_the_next():
+    # BR2.4 / functional-spec W2 step 4: the run that finds the practice issue
+    # closed is the first sighting of a fresh drill, not a wasted run.
     practice_state = alerted(key=PRACTICE, practice=True)
-    state, decision = sm.decide(practice_state, seen("down", 60, key=PRACTICE), None, practice=True)
-    assert decision.action == "nothing"
-    assert state is None
+    check = seen("down", 60, key=PRACTICE)
+    state, decision = sm.decide(practice_state, check, None, practice=True)
+    assert decision.action == "remember"
+    assert not decision.red
+    assert state.practice
+    assert state.first_down_at == check.checked_at
+    assert (state.alerted_at, state.issue_number, state.acknowledged) == (None, None, False)
 
 
 def test_the_next_practice_run_after_the_drill_starts_a_new_one():
     state, decision = sm.decide(None, seen("down", 70, key=PRACTICE), None, practice=True)
     assert decision.action == "remember"
     assert state.practice
+
+
+def test_a_repeat_drill_with_the_same_address_takes_two_runs():
+    # Drill 1: remember, open; the owner closes the issue by hand.
+    state, decision = sm.decide(None, seen("down", 0, key=PRACTICE), None, practice=True)
+    assert decision.action == "remember"
+    state, decision = sm.decide(state, seen("down", 6, key=PRACTICE), None, practice=True)
+    assert decision.action == "open-issue"
+    state = replace(state, issue_number=7)
+    # Drill 2 with the same address, after the issue was closed: two runs again.
+    state, decision = sm.decide(state, seen("down", 60, key=PRACTICE), None, practice=True)
+    assert decision.action == "remember"
+    state, decision = sm.decide(state, seen("down", 66, key=PRACTICE), None, practice=True)
+    assert decision.action == "open-issue"
+    assert decision.red
 
 
 def test_acknowledged_and_still_down_stays_quiet_and_is_not_acknowledged_again():
