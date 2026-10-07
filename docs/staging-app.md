@@ -166,6 +166,122 @@ Re-run it once from the Actions tab first, because a slow redeploy can outlast
 the 3-minute wait. If it fails again, roll back. The check still can't see the
 build, so sign in and read the `Build` caption to be sure the merge is live.
 
+## 6. Staging monitor
+
+Between merges, the `staging-monitor` workflow checks staging every 30 minutes
+(at minutes 7 and 37 of each hour). Each run makes one plain request to the
+app's Streamlit health path at the `STAGING_URL` address from step 5; it never
+signs in, never wakes a sleeping app and never writes data. When staging has
+been down on two checks at least 5 minutes apart, the run opens one GitHub
+issue labelled `staging-outage` and turns red, so you get the issue
+notification and GitHub's failed-run email. The first run that sees staging
+answer again comments how long the outage lasted and closes the issue. The run
+log of every run shows a `check:` line (what was seen) and a `decision:` line
+(what the monitor did); an `error:` line means the monitor itself failed.
+A run that stops at once with only a `staging_monitor.py: error:` line and no
+`check:` line is misconfigured, usually because the `STAGING_URL` variable is
+missing or not an https address; such a run exits with code 2 and checks
+nothing.
+
+### When an outage issue opens
+
+The issue says when staging was first seen down, what was seen (the reason,
+such as `no-answer`, `timeout`, `error-status`, `redirect` or
+`unexpected-page`, and the HTTP status) and links to the run that confirmed
+it. Then:
+
+1. Check Streamlit's own status page and the app's page on Streamlit
+   Community Cloud. If the host is having trouble, wait; the monitor closes
+   the issue once staging answers again.
+2. If only this app is down, reboot it from the app's menu on Streamlit
+   Community Cloud.
+3. If it broke right after a merge, revert that merge through a pull request
+   (see Rollback); `staging-check` then runs on the revert.
+
+Closing the issue by hand while staging is still down tells the monitor you
+know about it: later runs stay quiet until staging is back, and the next
+outage after that opens a new issue.
+
+### What it can and cannot see
+
+- GitHub's schedule is best-effort: runs can start late or be skipped, and
+  scheduled runs only run on `main`. With a check every 30 minutes and two
+  down checks needed, an alert comes about 30 to 60 minutes after an outage
+  starts, later if GitHub runs late. A shorter outage may never alert.
+  If GitHub skips runs for more than 90 minutes after a first down check,
+  the monitor forgets that check and starts counting again.
+- Asleep is not down. Streamlit puts an app with no visitors to sleep, and
+  the monitor treats its sleep or waking page as normal and never presses the
+  wake button.
+- A broken app that still answers `ok` on its health path is not seen: the
+  health path says the app's server runs, not that the dashboard works.
+  Signing in (step 4 (c)) is still the way to check the dashboard itself.
+
+**Learning what a sleeping app answers.** Nobody has yet seen what the health
+path returns while staging sleeps. Until a real sleep has been seen, every
+sleep may raise an alert about 30 minutes later if the host answers with a
+redirect or a page the monitor doesn't recognise. So in the first days, an
+issue whose reason is `redirect` or `unexpected-page` may be a sleep: open
+staging in a browser to check. If it was asleep, close the issue, then copy
+from that run's log the `check:` line and the `check-detail:` line under it
+(status, content type and body length, never the page itself) into a new
+issue or pull request, and adjust `SLEEP_WORDING` (or the classifier) in
+`scripts/staging_monitor.py` to match.
+
+### Stopping the monitor
+
+If the monitor is noisy or broken, stop it at once in GitHub: Actions >
+`staging-monitor` > the "..." menu > Disable workflow. This is a temporary
+step: fix or revert the monitor through a pull request, then switch it back
+on with Enable workflow. Never leave it disabled without saying so in an
+issue.
+
+GitHub also switches scheduled workflows off by itself after 60 days without
+activity in the repository, and emails the owner before it does. To switch
+the monitor back on, open Actions > `staging-monitor` and click Enable
+workflow (or push any commit to `main` before the 60 days run out). If you
+see no `staging-monitor` run for more than about 2 hours, check this first.
+
+To make the monitor forget everything it remembered (for example after a bad
+state), delete every saved state, not just the newest, because the next run
+would fall back to an older one:
+
+```bash
+gh cache list --key staging-monitor-state- --limit 1000 --json id --jq '.[].id' | xargs -n1 gh cache delete
+```
+
+The next run then starts from nothing; if an outage issue is still open, it
+picks that issue up again instead of opening a second one.
+
+### Practice alert
+
+Run this once after the monitor first merges, and again whenever you want to
+be sure alerts still reach you. It never touches staging or its issue.
+
+1. In GitHub, Actions > `staging-monitor` > Run workflow, and set
+   `practice_address` to an address under the reserved `.invalid` domain,
+   which can never answer, such as `https://practice-1.invalid`. Never use
+   staging or a host the team does not own. Start the runs yourself, because
+   a manual run's failure email goes to whoever started it.
+2. That first run records the practice outage and stays green.
+3. At least 5 minutes, and less than 90 minutes, later, start a second run
+   with the same address. So the drill is two manual runs, at least 5 minutes
+   apart. A second run started 90 minutes or more after the first forgets it,
+   records a new first sighting and stays green; start one more run within the
+   window. The second run opens an issue labelled `staging-outage-practice`,
+   titled "Practice: ... is down", and turns red. If a practice run shows as
+   cancelled (it can collide with a queued scheduled run), start it again.
+4. Close the practice issue by hand. That ends the drill. A later drill can
+   use the same address: its first run notices the closed issue and records
+   the new drill's first sighting, so it again takes two runs at least 5
+   minutes apart.
+
+The drill passes when you receive both the practice issue's GitHub
+notification and the failed-run email from the second run. If only the issue
+notification arrives, the drill still passes; note here that the issue
+notification is the alert to rely on. If neither arrives, the drill fails and
+the monitoring work is not done.
+
 ## Rollback
 
 - A bad change on staging: revert it on `main` through a pull request, let the
