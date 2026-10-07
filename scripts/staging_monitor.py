@@ -354,8 +354,10 @@ def decide(state, observation: Observation, open_issue: OutageIssue | None, *, p
     """Apply BR2.1-BR2.10 in order; returns ``(new_state, decision)``.
 
     ``open_issue`` is the monitor's open issue for this target, if GitHub has
-    one. ``new_state`` None means the entry is forgotten. Pure: no clock,
-    network or environment reads, so every transition is tested directly.
+    one. ``new_state`` is always an entry to save: since BR2.4 a closed
+    practice issue starts the next drill rather than forgetting the entry.
+    Pure: no clock, network or environment reads, so every transition is
+    tested directly.
     """
     notes: list[str] = []
     state = _trusted(state, observation, notes)
@@ -556,7 +558,10 @@ def _own_issue(item, key: str, label: str) -> OutageIssue | None:
 
 
 def find_open_issue(sender, key: str, practice: bool) -> OutageIssue | None:
-    """The oldest open issue the monitor opened for this target, if any."""
+    """The oldest open issue the monitor opened for this target, if any.
+
+    Only the first 100 open issues with the label are read; the monitor keeps
+    at most one open per target, so more than that is not expected."""
     label = _label(practice)
     listing = sender("GET", f"/issues?state=open&labels={label}&per_page=100")
     if not isinstance(listing, list):
@@ -762,11 +767,7 @@ def run_once(path, key, practice, now, probe_fn, sender, env) -> int:
     new_state, decision = decide(states.get(key), observation, found, practice=practice)
     for note in decision.notes:
         print(f"state: {note}")
-    new_state, failed = _act(decision, new_state, observation, practice, sender, env)
-    if new_state is None:
-        states.pop(key, None)
-    else:
-        states[key] = new_state
+    states[key], failed = _act(decision, new_state, observation, practice, sender, env)
     return _save(path, states, now, failed=failed or decision.red)
 
 
