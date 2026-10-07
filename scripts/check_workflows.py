@@ -22,19 +22,28 @@ _PINNED = re.compile(r"@[0-9a-f]{40}$")
 _RUN = re.compile(r"^(?P<indent>\s*)-?\s*run:\s*(?P<rest>.*)$")
 _SECRET = re.compile(r"\$\{\{\s*secrets\.")
 _WRITE_ALL = re.compile(r"""^\s*permissions:\s*["']?write-all["']?\s*(#.*)?$""")
+_WITH = re.compile(r"^\s*with:\s*(#.*)?$")
 _PERSIST_OFF = re.compile(r"""^\s*persist-credentials:\s*["']?false["']?\s*(#.*)?$""")
 
 
 def _checkout_keeps_credentials(lines, index):
     """True when the checkout step whose `uses:` is lines[index] lacks
-    `persist-credentials: false`. The step runs until a line indented no
-    deeper than its `- ` marker."""
+    `persist-credentials: false` under its `with:`. The step runs until a line
+    indented no deeper than its `- ` marker; the key counts only inside `with:`,
+    since anywhere else (`env:`, say) checkout never reads it."""
     line = lines[index]
     step_indent = _indent(line) if line.lstrip().startswith("-") else _indent(line) - 2
+    with_indent = None
     for following in lines[index + 1 :]:
-        if following.strip() and _indent(following) <= step_indent:
+        if not following.strip():
+            continue
+        if _indent(following) <= step_indent:
             break
-        if _PERSIST_OFF.match(following):
+        if with_indent is not None and _indent(following) <= with_indent:
+            with_indent = None
+        if _WITH.match(following):
+            with_indent = _indent(following)
+        elif with_indent is not None and _PERSIST_OFF.match(following):
             return False
     return True
 
@@ -65,7 +74,7 @@ def check_text(name, text):
         uses = _USES.match(line)
         if uses:
             ref = uses.group("ref")
-            if ref.startswith("actions/checkout@") and _checkout_keeps_credentials(lines, number - 1):
+            if ref.lower().startswith("actions/checkout@") and _checkout_keeps_credentials(lines, number - 1):
                 problems.append(f"{name}:{number}: actions/checkout needs `with: persist-credentials: false`")
             if not ref.startswith(("./", "docker://")):
                 if not _PINNED.search(ref):

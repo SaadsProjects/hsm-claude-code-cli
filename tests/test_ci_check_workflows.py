@@ -119,3 +119,40 @@ def test_write_all_permissions_fail(line):
     else:
         text = GOOD.replace("permissions: {}", line)
     assert any("write-all" in p for p in cw.check_text("ci.yml", text))
+
+
+def test_persist_credentials_outside_the_with_block_does_not_count():
+    text = GOOD.replace("        with:\n          fetch-depth: 0\n", "        env:\n          fetch-depth: 0\n")
+    assert any("persist-credentials: false" in p for p in cw.check_text("ci.yml", text))
+
+
+def test_an_expression_is_not_a_literal_false():
+    text = GOOD.replace("persist-credentials: false", "persist-credentials: ${{ false }}")
+    assert any("persist-credentials: false" in p for p in cw.check_text("ci.yml", text))
+
+
+def test_the_checkout_rule_ignores_the_case_of_the_action_name():
+    text = GOOD.replace("actions/checkout@", "Actions/Checkout@").replace("          persist-credentials: false\n", "")
+    assert any("persist-credentials: false" in p for p in cw.check_text("ci.yml", text))
+
+
+def test_write_all_with_a_trailing_comment_still_fails():
+    text = GOOD.replace("permissions: {}", "permissions: write-all  # temporary")
+    assert any("write-all" in p for p in cw.check_text("ci.yml", text))
+
+
+def test_persist_credentials_under_a_key_after_with_does_not_count():
+    # The with: block ends at its next sibling key, so the key under env: is
+    # not read by checkout even though a with: block came first.
+    text = GOOD.replace(
+        "        with:\n          fetch-depth: 0\n          persist-credentials: false\n",
+        "        with:\n          fetch-depth: 0\n        env:\n          persist-credentials: false\n",
+    )
+    assert any("persist-credentials: false" in p for p in cw.check_text("ci.yml", text))
+
+
+def test_a_trailing_comment_on_the_with_line_is_allowed():
+    text = GOOD.replace(
+        "        with:\n          fetch-depth: 0\n", "        with:  # full history\n          fetch-depth: 0\n"
+    )
+    assert cw.check_text("ci.yml", text) == []
