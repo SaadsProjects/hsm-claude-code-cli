@@ -355,9 +355,10 @@ def test_monitor_section_bounds_the_practice_drill_by_the_stale_rule():
     stale = int(sm.STALE_AFTER.total_seconds() // 60)
     section = re.sub(r"\s+", " ", monitor_section())
     assert f"less than {stale} minutes" in section
-    assert any(f"{stale} minutes" in block and "skipped" in block for block in monitor_paragraphs()), (
+    assert f"skips runs for more than {stale} minutes" in section, (
         "the runbook doesn't say that skipped runs longer than the stale limit reset a half-seen outage"
     )
+    assert f"more than {stale} minutes after the first forgets it" in section
 
 
 def test_monitor_section_covers_a_sleep_answer_the_wording_cannot_match_and_a_cancelled_practice_run():

@@ -1223,6 +1223,22 @@ def test_a_practice_drill_opens_a_practice_issue_and_leaves_staging_alone(tmp_pa
     assert loaded[PRACTICE].issue_number == 5
 
 
+def test_a_closed_practice_issue_ends_the_drill_and_the_run_starts_the_next_one(tmp_path, capsys):
+    # BR2.4 through main(): the practice issue is no longer open, so this run
+    # is the next drill's first sighting; it stays green and opens nothing.
+    env = {**STAGING_ENV, "PRACTICE_ADDRESS": PRACTICE}
+    state = {PRACTICE: alerted(key=PRACTICE, practice=True, number=5)}
+    sender = FakeSender()
+    code, path = run(tmp_path, env=env, now=at(60), probe=FakeProbe(**DOWN_PROBE), sender=sender, state=state)
+    out, _ = lines(capsys)
+    assert code == sm.EXIT_OK
+    assert "decision: remember (first sighting)" in out
+    assert [m for m, _, _ in sender.calls] == ["GET"]
+    saved = sm.load_state(path)[0][PRACTICE]
+    assert saved.practice
+    assert (saved.first_down_at, saved.issue_number, saved.alerted_at) == (at(60), None, None)
+
+
 def test_the_happy_path_with_the_real_probe_against_a_local_server(tmp_path, capsys):
     # target_key insists on https, so the real probe is aimed at a local http server.
     with serve(200, b"ok") as (base, received):

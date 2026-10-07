@@ -266,7 +266,7 @@ be sure alerts still reach you. It never touches staging or its issue.
 2. That first run records the practice outage and stays green.
 3. At least 5 minutes, and less than 90 minutes, later, start a second run
    with the same address. So the drill is two manual runs, at least 5 minutes
-   apart. A second run started 90 minutes or more after the first forgets it,
+   apart. A second run started more than 90 minutes after the first forgets it,
    records a new first sighting and stays green; start one more run within the
    window. The second run opens an issue labelled `staging-outage-practice`,
    titled "Practice: ... is down", and turns red. If a practice run shows as

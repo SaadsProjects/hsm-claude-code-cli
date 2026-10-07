@@ -9,8 +9,9 @@
 # about 30-60 minutes after an outage starts (docs/staging-app.md). What the
 # previous runs saw is carried in the Actions cache: restored before the
 # script, saved after it even when the run fails. Its own concurrency group
-# never cancels a run, so two runs never act on the same outage at once, and
-# it never touches staging-check's group. Opening the issue turns the run red,
+# never cancels a running check, so two runs never act on the same outage at
+# once, and it never touches staging-check's group. GitHub still keeps only one
+# waiting run per group, so a newly queued run can replace a waiting one. Opening the issue turns the run red,
 # so GitHub's failed-run email reaches the owner too.
 #
 # Only this job may write issues, using the built-in GITHUB_TOKEN; it holds no
