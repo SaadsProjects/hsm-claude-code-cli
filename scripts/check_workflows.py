@@ -7,7 +7,10 @@ Complements actionlint (syntax and expressions) with this project's rules:
     a `# vX.Y.Z` comment saying which release it is;
   - every workflow declares top-level `permissions`, so jobs start from none;
   - no `${{ secrets.* }}` expression appears on a `run:` line or inside a
-    `run:` block (secrets reach steps through `env:` only, never a command line).
+    `run:` block (secrets reach steps through `env:` only, never a command line);
+  - every `actions/checkout` step sets `persist-credentials: false`, so later
+    steps never find the job's token in .git/config;
+  - no workflow or job grants `permissions: write-all`.
 """
 
 import re
@@ -18,6 +21,22 @@ _USES = re.compile(r"^\s*-?\s*uses:\s*(?P<ref>[^\s#]+)\s*(?P<comment>#.*)?$")
 _PINNED = re.compile(r"@[0-9a-f]{40}$")
 _RUN = re.compile(r"^(?P<indent>\s*)-?\s*run:\s*(?P<rest>.*)$")
 _SECRET = re.compile(r"\$\{\{\s*secrets\.")
+_WRITE_ALL = re.compile(r"""^\s*permissions:\s*["']?write-all["']?\s*(#.*)?$""")
+_PERSIST_OFF = re.compile(r"""^\s*persist-credentials:\s*["']?false["']?\s*(#.*)?$""")
+
+
+def _checkout_keeps_credentials(lines, index):
+    """True when the checkout step whose `uses:` is lines[index] lacks
+    `persist-credentials: false`. The step runs until a line indented no
+    deeper than its `- ` marker."""
+    line = lines[index]
+    step_indent = _indent(line) if line.lstrip().startswith("-") else _indent(line) - 2
+    for following in lines[index + 1 :]:
+        if following.strip() and _indent(following) <= step_indent:
+            break
+        if _PERSIST_OFF.match(following):
+            return False
+    return True
 
 
 def _indent(line):
@@ -40,9 +59,14 @@ def check_text(name, text):
                 problems.append(f"{name}:{number}: secret used on a run: line; pass it through env: instead")
                 continue
 
+        if _WRITE_ALL.match(line):
+            problems.append(f"{name}:{number}: permissions: write-all; grant only the permissions the job needs")
+
         uses = _USES.match(line)
         if uses:
             ref = uses.group("ref")
+            if ref.startswith("actions/checkout@") and _checkout_keeps_credentials(lines, number - 1):
+                problems.append(f"{name}:{number}: actions/checkout needs `with: persist-credentials: false`")
             if not ref.startswith(("./", "docker://")):
                 if not _PINNED.search(ref):
                     problems.append(f"{name}:{number}: {ref} is not pinned to a full commit SHA")
