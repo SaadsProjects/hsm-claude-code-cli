@@ -3,9 +3,8 @@
     python scripts/coverage_gate.py [--coverage-json coverage.json] [--floor-file .coverage-floor] [--base-ref origin/main]
 
 Once the floor is 80 or more, the 80% gate is on as well; a floor below 80
-works as a ratchet only, and promotion to production stays blocked until the
-floor reaches 80 (scripts/promote_preconditions.py). With --base-ref, it also
-fails when the floor file is lower than it was at that ref.
+works as a ratchet only. With --base-ref, it also fails when the floor file is
+lower than it was at that ref.
 """
 
 import argparse

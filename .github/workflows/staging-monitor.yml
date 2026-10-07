@@ -1,0 +1,72 @@
+# Staging monitor: between merges, check staging every 30 minutes and open one
+# GitHub issue when it has been down for 5 minutes or more (two down checks at
+# least 5 minutes apart), then close it when staging answers again. Each run
+# makes one plain request to staging's Streamlit health path with
+# scripts/staging_monitor.py; it never signs in, never wakes a sleeping app
+# and never writes app data. A sleeping app is not down.
+#
+# GitHub's schedule is best-effort and runs only on main, so an alert comes
+# about 30-60 minutes after an outage starts (docs/staging-app.md). What the
+# previous runs saw is carried in the Actions cache: restored before the
+# script, saved after it even when the run fails. Its own concurrency group
+# never cancels a running check, so two runs never act on the same outage at
+# once, and it never touches staging-check's group. GitHub still keeps only one
+# waiting run per group, so a newly queued run can replace a waiting one. Opening the issue turns the run red,
+# so GitHub's failed-run email reaches the owner too.
+#
+# Only this job may write issues, using the built-in GITHUB_TOKEN; it holds no
+# repository secret. The staging URL, the practice address and the token
+# reach the script through env, never on the command line. A manual run with
+# practice_address set (an https address under .invalid) raises a practice
+# alert instead; scheduled runs never use it.
+name: staging-monitor
+
+on:
+  schedule:
+    - cron: "7,37 * * * *"
+  workflow_dispatch:
+    inputs:
+      practice_address:
+        description: "Practice alert only: an https address under .invalid (leave empty to check staging)"
+        required: false
+        default: ""
+        type: string
+
+concurrency:
+  group: staging-monitor
+  cancel-in-progress: false
+
+permissions: {}
+
+jobs:
+  monitor:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 5
+    permissions:
+      contents: read
+      issues: write
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+      - uses: actions/setup-python@5fda3b95a4ea91299a34e894583c3862153e4b97 # v7.0.0
+        with:
+          python-version: "3.14"
+      # The key never matches exactly, so restore-keys picks the newest saved state.
+      - uses: actions/cache/restore@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v6.1.0
+        with:
+          path: .staging-monitor
+          key: staging-monitor-state-${{ github.run_id }}-${{ github.run_attempt }}
+          restore-keys: staging-monitor-state-
+      - name: Check staging
+        env:
+          STAGING_URL: ${{ vars.STAGING_URL }}
+          PRACTICE_ADDRESS: ${{ inputs.practice_address }}
+          GITHUB_TOKEN: ${{ github.token }}
+        run: python scripts/staging_monitor.py --state .staging-monitor/state.json
+      # Saved even when the check failed, so a failed open or close is retried.
+      - uses: actions/cache/save@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v6.1.0
+        if: always()
+        with:
+          path: .staging-monitor
+          key: staging-monitor-state-${{ github.run_id }}-${{ github.run_attempt }}
