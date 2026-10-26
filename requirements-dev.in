@@ -14,13 +14,13 @@ mcp[cli]==1.30.0
 # ruff is the linter and formatter; .claude/hooks/lint_before_commit.py runs
 # it before every commit and fails closed if it is missing. CI runs the same
 # pinned version.
-ruff==0.16.8
+ruff==0.17.2
 
 pytest==9.1.1
 # Browser tests (`-m browser`) and scripts/postdeploy_check.py drive Chromium
 # through Playwright; fetch the browser once with
 # `python -m playwright install chromium`.
-playwright==1.63.0
+playwright==1.64.1
 pytest-rerunfailures  # CI retries a failing test once (--reruns 1)
 coverage  # line coverage with subprocess measurement (.coveragerc)
 
